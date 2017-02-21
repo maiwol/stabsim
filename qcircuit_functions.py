@@ -8,6 +8,55 @@ from visualizer import browser_vis as brow
 
 
 
+
+def combine_stabs(list_stabs, list_destabs):
+    '''
+    takes a list of lists of stabilizers and
+    a list of lists of destabilizers and 
+    combine them.
+    Should be able to do this faster directly
+    in CHP, but it's OK.  MGA 02/20/2017.
+    '''
+
+    stab_dict = {}
+    for i in range(len(list_stabs)):
+        stab_dict[i] = {'n_stabs': len(list_stabs[i]),
+                        'len_stabs': len(list_stabs[i][0]) - 1}
+
+    combined_stabs = []
+    combined_destabs = []
+    for stab_index in stab_dict:
+        if stab_index == 0:
+            pre_n = 0
+        else:
+            pre_n = sum([stab_dict[i]['len_stabs']
+                         for i in range(stab_index)])
+        if stab_index == len(stab_dict) - 1:
+            post_n = 0
+        else:
+            post_n = sum([stab_dict[i]['len_stabs']
+                          for i in range(stab_index+1, len(stab_dict))])
+    
+        pre_Is = ''.join(['I' for i in range(pre_n)])
+        post_Is = ''.join(['I' for i in range(post_n)])
+
+        new_stabs, new_destabs = [], []
+        for i in range(len(list_stabs[stab_index])):
+            stab = list_stabs[stab_index][i]
+            destab = list_destabs[stab_index][i]
+            new_stab = stab[0] + pre_Is + stab[1:] + post_Is
+            new_destab = destab[0] + pre_Is + destab[1:] + post_Is
+            new_stabs += [new_stab]
+            new_destabs += [new_destab]
+
+        combined_stabs += [new_stabs]
+        combined_destabs += [new_destabs]
+
+    return combined_stabs, combined_destabs    
+
+
+
+
 def update_stabs(stabs, destabs, operation):
     '''
     This function is used exclusively when operation only has
@@ -270,8 +319,8 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
             local_circ = c.Encoded_Gate(enc_gate_name, [local_circ]).circuit_wrap()
             measure_circ.join_circuit(local_circ, ancilla_parallel)
 
-
-    measure_circ = c.Encoded_Gate('Measure2logicals', [measure_circ]).circuit_wrap()
+    full_gatename = 'Measure2logicals' + logicals
+    measure_circ = c.Encoded_Gate(full_gatename, [measure_circ]).circuit_wrap()
 
     return measure_circ
 
