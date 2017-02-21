@@ -295,7 +295,7 @@ class Supra_Circuit(object):
             return n_rep
 
         
-        elif quant_gate.gate_name == 'Measure2logicals':
+        elif quant_gate.gate_namei[:16] == 'Measure2logicals':
             
             quant_circs = [g[i].circuit_list[0] for g in sub_circ.gates]
             q_oper = Measure_2_logicals(self.state[:], quant_circs, self.chp_loc)
@@ -311,11 +311,11 @@ class Supra_Circuit(object):
             # doesn't require feedback based on measurements.
             
             q_oper = Quantum_Operation(self.state[:], [sub_circ], self.chp_loc)
-            empty_dict = q_oper.run_one_circ(0)            
+            output_dict = q_oper.run_one_circ(0)            
 
             self.state = [q_oper.stabs[:], q_oper.destabs[:]]
             
-            return
+            return output_dict
 
 
 
@@ -326,6 +326,18 @@ class CNOT_latt_surg(Supra_Circuit):
     def run_all_gates(self):
         '''
         '''
-        
-        
 
+        n_repEC = []
+        for q_oper in self.quant_opers:
+            output = self.run_one_oper(q_oper)
+            if q_oper.gate_name == 'EC_CatCorrect':
+                n_repEC += [output]
+            elif q_oper.gate_name == 'Measure2logicalsX':
+                parX = output[0]
+                n_rep1X, n_rep2X = output[1]
+            elif q_oper.gate_name == 'Measure2logicalsZ':
+                parZ = output[0]
+                n_rep1Z, n_rep2Z = output[1]
+            elif q_oper.gate_name == 'MeasureX':
+                meas_dict = output
+        
