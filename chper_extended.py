@@ -13,10 +13,11 @@ a list of stabilizers (stabs) and destabilizers (destabs) instead of a ket
 state and likewise return a list of stabs and destabs at the end of the run.
 """
 
+import sys
 import os
 import time as t
 import circuit
-#import browser_vis as brow
+from visualizer import browser_vis as brow
 from subprocess import Popen, PIPE
 
 class Chper(object):
@@ -65,16 +66,16 @@ class Chper(object):
 			'CNOT':[('C', [0,1])],
 			'CZ':[('H', [1]), ('C', [0,1]), ('H', [1])],
 			'CY':[('P', [1]), ('C', [0,1]), ('P',[1]),('P',[1]),('P',[1])],
-            'H':[('H', [0])],
+            		'H':[('H', [0])],
 			'P':[('P', [0])],
 			'X':[('H', [0]),('P', [0]),('P', [0]),('H', [0])],
 			'Y':[('P', [0]),('H', [0]),('P', [0]),('P', [0]),('H', [0]),('P', [0]),('P',[0]),('P',[0])],
 			'Z':[('P', [0]),('P', [0])],
 			'Measure':[('M', [0])],
 			'MeasureZ':[('M', [0])],
-            'MeasureZDestroy':[('M', [0])],
+            		'MeasureZDestroy':[('M', [0])],
 			'MeasureX':[('H', [0]),('M', [0])],
-            'MeasureXDestroy':[('H', [0]),('M', [0])],
+            		'MeasureXDestroy':[('H', [0]),('M', [0])],
 			'M':[('M', [0])],
 			'I':[],
             'ImZ': [],
@@ -99,7 +100,8 @@ class Chper(object):
 		#brow.from_circuit(circ, True)
 		#t.sleep(15)
 		self.num_d_qub = num_d_qub
-		self.num_a_qub = num_a_qub		
+		self.num_a_qub = num_a_qub
+		#print num_d_qub, num_a_qub
 		self.num_qub = num_d_qub + num_a_qub
 		self.final_stab_init_i = final_stab_init_i 
 		self.qubit_num_map = {}	# key = Qubit, value = chp number
@@ -120,7 +122,7 @@ class Chper(object):
 		self.input_states = self.set_input_states(states)[:]
 		self.final_stabs = []
 		self.final_destabs = []
-	
+
 		self.input_output_files = input_output_files
 		if self.input_output_files:
 			self.input_file, self.n_gates = self.make_input_file()

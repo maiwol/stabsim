@@ -922,6 +922,18 @@ def run_stabs_Cross(circ, n_d_q, stabs, destabs, chp_location, CHP_IO_files=True
     '''
     '''
     n_a_q = len(circ.ancilla_qubits())
+    
+    #n_d_q = 21
+    #stabs, destabs = [], []
+    #for i in range(21):
+    #    stab = ['Z' if i==j else 'I' for j in range(21)]
+    #    stab.insert(0, '+')
+    #    destab = ['X' if i==j else 'I' for j in range(21)]
+    #    destab.insert(0, '+')
+    #    stabs += [''.join(stab)]
+    #    destabs += [''.join(destab)]
+
+    #print n_d_q, stabs, destabs
     circ_chp = chper.Chper(circ=circ, num_d_qub=n_d_q, num_a_qub=n_a_q,
                            stabs=stabs, destabs=destabs,
                            anc_stabs=[], anc_destabs=[],
@@ -1138,6 +1150,59 @@ def update_one_stab(state, operator):
 
 
 
+def stabs_QEC_diVin(dic, n_first_anc, code, stab_kind=None):
+    '''
+    After one round of either X or Z stabs (for a CSS code)
+    or the whole set of stabs (for a non-CSS code),
+    with an unverified cat state, we first correct the hook 
+    errors (errors that propagated from ancilla to data),
+    and then return the correction for the data errors.
+    '''
+    
+    # so far only Steane and 5qubit codes
+    
+    extra_s = 0  # little hack to get the stabilizer right
+
+    if code == 'Steane':
+        n_q, s, w = 7, 3, 4
+        code_class = steane.Code
+        if type(stab_kind) != type(''):
+            raise TypeError('stab_kind either X or Z.')
+        if stab_kind == 'Z':
+            extra_s = 3
+            error = 'X'
+        elif stab_kind == 'X':
+            error = 'Z'
+
+
+    elif code == '5qubit':
+        n_q, s, w = 5, 4, 4
+        code_class = fivequbit.Code
+
+
+    # 1 Raise exception if dictionary is not right length 
+    if len(dic) != s*w:
+        raise IndexError('Dictionary does not have right length.')
+
+    # 2 Assign data_corr and prop_corr
+    prop_corr = ['I' for i in range(n_q)]
+    data_error = []
+
+    for i in range(s):
+        outcomes = [dic[n_first_anc + i*w + j][0]
+                                for j in range(w)]
+        data_error += [outcomes.pop(1)]
+        if 0 not in outcomes:
+            stab = code_class.stabilizer[i + extra_s]
+            prop_corr = update_errors_anc(prop_corr,
+                                          stab)
+    
+    data_corr = code_class.stabilizer_syndrome_dict[tuple(data_error)]
+    if code == 'Steane':
+        data_corr = [i if i == 'I' else error for i in data_corr]   
+    
+    return data_corr, prop_corr
+
 
 
 def stabs_Steane(dic, n_first_anc, s=3, w=4, stab_kind='X'):
@@ -1323,12 +1388,12 @@ def logical_error_surface17(stabs, state='+Z'):
 
 
 
-def update_errors_anc(current_errors, stab, error='X'):
+def update_errors_anc(current_errors, stab):
     '''
     not error on ancilla, but errors that propagated
-    from ancilla to data
+    from ancilla to data (hook errors)
     In this new implementation we don't need the input
-    error.
+    error, which was present in the old one.
     This is not the most elegant solution, but it works.
     MGA 6/29/16.
     
@@ -1371,31 +1436,27 @@ def update_errors_anc(current_errors, stab, error='X'):
 
 
 
-def prepare_stabs_Steane(init_state, chp_location, CHP_IO_files=True):
+def prepare_stabs_Steane(init_state, chp_loc='./chp_extended',
+                         CHP_IO_files=True):
     '''
     Prepares initial stabilizers and destabilizers
     specifically for Steane
     '''
-    if init_state == '+Z':
-        init_circ = cor.Steane_Correct.encoded_zero_Steane()
-    elif init_state == '+X':
-        init_circ = cor.Steane_Correct.encoded_plus_Steane()
-    elif init_state == '+Y':
-        init_circ = cor.Steane_Correct.encoded_plus_i_Steane()
-    else:
-        text='|0>, |+>, and |+i> are the only initial states.'
-        raise TypeError(text)       
-            
-    #print 'state = %s' %init_state
+    stabs = steane.Code.stabilizer_CHP[:]
+    destabs = steane.Code.destabilizer_CHP[:]
+    try:
+        stabs += [steane.Code.stabilizer_logical_CHP[init_state]]
+        destabs += [steane.Code.destabilizer_logical_CHP[init_state]] 
+    except KeyError:
+        if init_state == '+Y':
+            init_circ = cor.Steane_Correct.encoded_plus_i_Steane()
+            stabs, destabs = create_stabs_and_destabs(init_circ,
+                                                      chp_loc,
+                                                      CHP_IO_files)
+        else:
+            print 'Sorry, we cannot prepare the state %s for the Steane code.' %init_state
     
-    return create_stabs_and_destabs(init_circ,chp_location,
-                    CHP_IO_files)
-
-    #print 'stabs =', stabs
-    #print 'IO =', CHP_IO_files
-    #t.sleep(5)
-
-    #return stabs, destabs
+    return stabs, destabs
     
 
     
@@ -2486,7 +2547,9 @@ def create_EC_subcircs(operation, Is_after2q,
                                                           redun, initial_I,
                                                           meas_errors, 
                                                           Is_after2q,
-                                                          initial_trans)
+                                                          initial_trans,
+                                                          ancilla_parallel)
+        #EC_circ = EC_circ.gates[0].circuit_list[0]
     
     # Steane and 5-qubit codes use 4-qubit cat states as ancillae
     else:
@@ -2509,9 +2572,12 @@ def create_EC_subcircs(operation, Is_after2q,
                                                  code,
                                                  meas_errors,
                                                  Is_after2q)    
-        EC_circ = EC_circ.gates[0].circuit_list[0]
+        #EC_circ = EC_circ.gates[0].circuit_list[0]
 
-    
+
+    brow.from_circuit(EC_circ, True)
+    sys.exit(0)
+
     subcircs = []
     for i in range(n_subcircs):
         subcirc = Circuit(gates=[EC_circ.gates[i]])

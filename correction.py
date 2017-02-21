@@ -301,7 +301,8 @@ class Bare_Correct:
 
     @classmethod
     def generate_rep_bare_meas(cls, n_data, stabilizer_list, n_rounds, input_I_round, 
-                               meas_errors, Is_after_two_qubit, initial_trans=False):
+                               meas_errors, Is_after_two_qubit, initial_trans=False,
+                               ancilla_parallel=False):
         '''
         Is_after_two_qubits:  whether or not we want to add Is after 2-qubit gates,
                               to add errors on the Cross code.
@@ -327,7 +328,10 @@ class Bare_Correct:
             else:
                 stab_circ = Encoded_Gate(gate_name,[bare_meas_circ(n,s_l,False,m_e,i_t)]).circuit_wrap()
                 
-            rep_meas_circ.join_circuit(stab_circ, False)
+            rep_meas_circ.join_circuit(stab_circ, ancilla_parallel)
+        
+        rep_meas_circ = Encoded_Gate('EC_BareCorrect',
+                        [rep_meas_circ]).circuit_wrap()
 
         #brow.from_circuit(rep_meas_circ, True)
 

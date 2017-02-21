@@ -89,6 +89,38 @@ class Code:
                     (1,1,0):["I","I","I","I","I","E","I"],
                     (1,1,1):["I","I","I","I","I","I","E"]}
 
+    # stabilizers in CHP-friendly format
+    stabilizer_CHP = [
+                        '+XIXIXIX',
+                        '+IXXIIXX',
+                        '+IIIXXXX',
+                        '+ZIZIZIZ',
+                        '+IZZIIZZ',
+                        '+IIIZZZZ'
+                     ]
+
+    destabilizer_CHP = [
+                        '+ZIIIIII',
+                        '+IZIIIII',
+                        '+IIIZIII',
+                        '+IIIIIXX',
+                        '+IIIIXIX',
+                        '+IIIIXXX'
+                       ]
+
+    stabilizer_logical_CHP = {'+Z': '+ZZZIIII',
+                              '-Z': '-ZZZIIII',
+                              '+X': '+XXXIIII',
+                              '-X': '-XXXIIII'}
+
+    destabilizer_logical_CHP = {'+Z': '+IIXIXXI',
+                                '-Z': '+IIXIXXI',
+                                '+X': '+IIZIZZI',
+                                '-X': '+IIZIZZI'}
+
+
+
+
     @classmethod
     def decode_meas_Steane(cls, list_meas):
         '''
