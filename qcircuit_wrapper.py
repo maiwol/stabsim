@@ -48,6 +48,7 @@ class Quantum_Operation(object):
             circuit = self.circuits[circuit]
 
         n_a_q = len(circuit.ancilla_qubits())
+        print 'n_anc =', n_a_q
 
         circ_chp = chper.Chper(circ=circuit,
                                num_d_qub=self.n_d_q,
@@ -82,10 +83,16 @@ class Measure_2_logicals(Quantum_Operation):
         The assumption is that there are 6 circuits.
         '''
         
-        first_outcomes = []
+        first4outcomes = []
         for i in range(4):
-            first4outcomes += [self.run_one_circ(i).values()[0]]
-        
+            #for g in self.circuits[i].gates:
+                #print g.gate_name, [q.qubit_id for q in g.qubits] 
+            #print self.run_one_circ(i).values()[0]
+            first4outcomes += [self.run_one_circ(i).values()[0][0]]
+       
+        #print first4outcomes
+        #print self.stabs
+
         outcomes_stab1 = [first4outcomes[0], first4outcomes[2]]
         outcomes_stab2 = [first4outcomes[1], first4outcomes[3]]
 
@@ -94,8 +101,11 @@ class Measure_2_logicals(Quantum_Operation):
             
         if outcomes_stab2[0] != outcomes_stab2[1]:
             outcomes_stab2 += [self.run_one_circ(5).values()[0]]
-        
+       
+        print outcomes_stab1
+        print outcomes_stab2
         parity = (outcomes_stab1[-1] + outcomes_stab2[-1])%2
+        print parity
 
         return parity, len(outcomes_stab1), len(outcomes_stab2)
 
@@ -137,20 +147,27 @@ class QEC_d3(Quantum_Operation):
         return the data errors.
         '''
 
-
+        data_qs = self.circuits[circuit].data_qubits()
+        data_q_ids = [q.qubit_id for q in data_qs]
+        pre_ns = min(data_q_ids)
+        pre_Is = ['I' for i in range(pre_ns)]
+        post_ns = len(self.stabs) - max(data_q_ids) - 1
+        post_Is = ['I' for i in range(post_ns)]
+        
         output_dict = self.run_one_circ(circuit)
         n_first_anc = min(output_dict.keys())
         data_errors, hook_errors = qfun.stabs_QEC_diVin(output_dict,
                                                         n_first_anc,
                                                         code,
                                                         stab_kind)
-      
-        #print 'hook errors =', hook_errors
-        corr_state = qfun.update_stabs(self.stabs,
-                                       self.destabs,
-                                       hook_errors)
+
+        if hook_errors.count('I') != len(hook_errors):
+            hook_errors = pre_Is + hook_errors + post_Is
+            corr_state = qfun.update_stabs(self.stabs,
+                                           self.destabs,
+                                           hook_errors)
        
-        self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
+            self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
 
         return data_errors
 
@@ -166,6 +183,13 @@ class QEC_d3(Quantum_Operation):
         
         if bare:  QEC_func = self.run_one_bare_anc
         else:     QEC_func = self.run_one_diVincenzo
+        
+        data_qs = self.circuits[0].data_qubits()
+        data_q_ids = [q.qubit_id for q in data_qs]
+        pre_ns = min(data_q_ids)
+        pre_Is = ['I' for i in range(pre_ns)]
+        post_ns = len(self.stabs) - max(data_q_ids) - 1
+        post_Is = ['I' for i in range(post_ns)]
 
         data_errors = []
         for i in range(2):
@@ -184,6 +208,7 @@ class QEC_d3(Quantum_Operation):
         # update the final states only if a correction
         # is needed, to save some time
         if correction.count('I') != len(correction):
+            correction = pre_Is + correction + post_Is
             corr_state = qfun.update_stabs(self.stabs,
                                            self.destabs,
                                            correction)
@@ -203,10 +228,23 @@ class QEC_d3(Quantum_Operation):
         At the end, it applies a correction.
         It returns the number of QEC rounds.
         It assumes the X stabilizers come first.
+        pre_n:  number of physical qubits before the physical
+                qubits onto which this QEC is acting.
+        post_n: number of physical qubits after the physical
+                qubits onto which this QEC is acting.
         '''
 
         if bare:  QEC_func = self.run_one_bare_anc
         else:     QEC_func = self.run_one_diVincenzo
+
+        data_qs = self.circuits[0].data_qubits()
+        data_q_ids = [q.qubit_id for q in data_qs]
+        pre_ns = min(data_q_ids)
+        pre_Is = ['I' for i in range(pre_ns)]
+        post_ns = len(self.stabs) - max(data_q_ids) - 1
+        post_Is = ['I' for i in range(post_ns)]
+        print 'pre =', pre_ns
+        print 'post =', post_ns
 
         Z_data_errors, X_data_errors = [], []
         
@@ -229,11 +267,19 @@ class QEC_d3(Quantum_Operation):
         if X_data_errors[0] != X_data_errors[1]:
             X_data_errors += [QEC_func(5, code, 'Z')]
 
+        print 'X_errors =', X_data_errors
+        print 'Z_errors =', Z_data_errors
+
         Z_corr, X_corr = Z_data_errors[-1], X_data_errors[-1]
+        
 
         # update the final states only if a correction
         # is needed, to save some time
         if 'Z' in Z_corr:
+            print 'stabs =', self.stabs
+            print 'Z_corr =', Z_corr
+            Z_corr = pre_Is + Z_corr + post_Is
+            print 'Z_corr =', Z_corr
             corr_state = qfun.update_stabs(self.stabs,
                                            self.destabs,
                                            Z_corr)
@@ -241,9 +287,11 @@ class QEC_d3(Quantum_Operation):
             self.destabs = corr_state[1][:]
         
         if 'X' in X_corr:
+            X_corr = pre_Is + X_corr + post_Is
             corr_state = qfun.update_stabs(self.stabs,
                                            self.destabs,
                                            X_corr)
+            print 'X_corr =', X_corr
             self.stabs = corr_state[0][:]
             self.destabs = corr_state[1][:]
 
@@ -281,7 +329,7 @@ class Supra_Circuit(object):
 
         if quant_gate.gate_name == 'EC_CatCorrect':
             
-            quant_circs = [g[i].circuit_list[0] for g in sub_circ.gates]
+            quant_circs = [g.circuit_list[0] for g in sub_circ.gates]
             q_oper = QEC_d3(self.state[:], quant_circs, self.chp_loc)
             
             if self.code == 'Steane':
@@ -295,11 +343,13 @@ class Supra_Circuit(object):
             return n_rep
 
         
-        elif quant_gate.gate_namei[:16] == 'Measure2logicals':
+        elif quant_gate.gate_name[:16] == 'Measure2logicals':
             
-            quant_circs = [g[i].circuit_list[0] for g in sub_circ.gates]
+            quant_circs = [g.circuit_list[0] for g in sub_circ.gates]
             q_oper = Measure_2_logicals(self.state[:], quant_circs, self.chp_loc)
             parity, n_rep1, n_rep2 = q_oper.run_all()
+
+            print parity, n_rep1, n_rep2
 
             self.state = [q_oper.stabs[:], q_oper.destabs[:]]
             
@@ -311,6 +361,9 @@ class Supra_Circuit(object):
             # doesn't require feedback based on measurements.
             
             q_oper = Quantum_Operation(self.state[:], [sub_circ], self.chp_loc)
+            if quant_gate.gate_name[:7] == 'Measure':
+                sub_circ.to_ancilla([q.qubit_id for q in sub_circ.qubits()])
+                q_oper.n_d_q = len(q_oper.stabs) - len(sub_circ.ancilla_qubits())
             output_dict = q_oper.run_one_circ(0)            
 
             self.state = [q_oper.stabs[:], q_oper.destabs[:]]
@@ -329,6 +382,7 @@ class CNOT_latt_surg(Supra_Circuit):
 
         n_repEC = []
         for q_oper in self.quant_opers:
+            print q_oper.gate_name
             output = self.run_one_oper(q_oper)
             if q_oper.gate_name == 'EC_CatCorrect':
                 n_repEC += [output]
@@ -340,4 +394,6 @@ class CNOT_latt_surg(Supra_Circuit):
                 n_rep1Z, n_rep2Z = output[1]
             elif q_oper.gate_name == 'MeasureX':
                 meas_dict = output
-        
+                print meas_dict
+
+            print self.state[0], '\n'

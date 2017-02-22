@@ -6,22 +6,15 @@ import cross
 from visualizer import browser_vis as brow
 
 
-
+# code parameters
 oper = 'Shor'
 code = 'Steane'
 n_code = 7
 bare = False
 
 
-s1=['+ZII', '+IZI', '-IIZ']
-s2=['+XIII', '+IXII', '-IIXI', '+IIIZ']
-s3=['+ZII', '+IZI', '-IIZ']
-
-print qfun.combine_stabs([s1, s2, s3], [s1, s2, s3])
-sys.exit(0)
-
+# create the supra-circuit
 Is_after2q = False
-#circuits = wrapper.create_EC_subcircs(oper, Is_after2q)
 circuits = qfun.create_latt_surg_CNOT(Is_after2q)
 #faulty_gate = circuits[0].gates[37]
 #faulty_qubit = faulty_gate.qubits[1]
@@ -32,36 +25,23 @@ circuits = qfun.create_latt_surg_CNOT(Is_after2q)
 
 chp_loc = './chp_extended'
 
+# create the initial state (|+> ctrl; |0> targ; all |0> anc)
 init_state_ctrl = wrapper.prepare_stabs_Steane('+X')
-init_state_targ = wrapper.prepare_stabs_Steane('+Z')
-print init_state_ctrl
-sys.exit(0)
+init_state_targ = wrapper.prepare_stabs_Steane('+X')
+anc_stabs, anc_destabs = [], []
+for i in range(n_code):
+    anc_stab = ['Z' if i==j else 'I' for j in range(n_code)]
+    anc_stab.insert(0, '+')
+    anc_destab = ['X' if i==j else 'I' for j in range(n_code)]
+    anc_destab.insert(0, '+')
+    anc_stabs += [''.join(anc_stab)]
+    anc_destabs += [''.join(anc_destab)]
+init_state_anc = anc_stabs, anc_destabs
 
-stabs, destabs = [], []
-for i in range(3*n_code):
-    stab = ['Z' if i==j else 'I' for j in range(3*n_code)]
-    stab.insert(0, '+')
-    destab = ['X' if i==j else 'I' for j in range(3*n_code)]
-    destab.insert(0, '+')
-    stabs += [''.join(stab)]
-    destabs += [''.join(destab)]
+all_stabs = [init_state_ctrl[0]]+[init_state_targ[0]]+[init_state_anc[0]]
+all_destabs = [init_state_ctrl[1]]+[init_state_targ[1]]+[init_state_anc[1]]
+init_state = qfun.combine_stabs(all_stabs, all_destabs)
 
-init_state = stabs, destabs
+supra_circ = qcirc.CNOT_latt_surg(init_state, circuits, code, chp_loc)
+supra_circ.run_all_gates()
 
-for g in circuits.gates:
-    print g.gate_name
-    subcirc = g.circuit_list[0]
-    for sub_g in subcirc.gates:
-        print sub_g.gate_name
-sys.exit(0)
-
-#q_oper = qcirc.Quantum_Operation(init_state, circuits, chp_loc)
-#dic = q_oper.run_one_circ(0)
-
-q_oper = qcirc.QEC_d3(init_state, circuits, chp_loc)
-#data_errors = q_oper.run_one_bare_anc(0, oper)
-#data_errors = q_oper.run_one_diVincenzo(0, code, 'X')
-n_rep = q_oper.run_fullQEC_nonCSS(code, bare)
-#n_rep = q_oper.run_fullQEC_CSS(code, bare)
-
-print n_rep

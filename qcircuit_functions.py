@@ -49,8 +49,8 @@ def combine_stabs(list_stabs, list_destabs):
             new_stabs += [new_stab]
             new_destabs += [new_destab]
 
-        combined_stabs += [new_stabs]
-        combined_destabs += [new_destabs]
+        combined_stabs += new_stabs
+        combined_destabs += new_destabs
 
     return combined_stabs, combined_destabs    
 
@@ -311,6 +311,12 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
             sec_targ = n_code*qubit_pairs[1][0] + qubit_pairs[1][1]
             local_circ.add_gate_at([n_code*3, first_targ], ent_gate)
             local_circ.add_gate_at([n_code*3, sec_targ], ent_gate)
+            if len(qubit_pairs) == 4:
+                third_targ = n_code*qubit_pairs[2][0] + qubit_pairs[2][1]
+                fourth_targ = n_code*qubit_pairs[3][0] + qubit_pairs[3][1]
+                local_circ.add_gate_at([n_code*3, third_targ], ent_gate)
+                local_circ.add_gate_at([n_code*3, fourth_targ], ent_gate)
+                
             if meas_errors:
                 local_circ.add_gate_at([n_code*3], 'ImX')
             local_circ.add_gate_at([n_code*3], 'MeasureX')
@@ -340,31 +346,33 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True):
     #    CNOT_circ.add_gate_at([i], 'I')
 
     # (1) Preparation of the ancilla
-    CNOT_circ.add_gate_at([n_code+5], 'H')
-    CNOT_circ.add_gate_at([n_code+5, n_code+3], 'CX')
+    CNOT_circ.add_gate_at([2*n_code+5], 'H')
+    CNOT_circ.add_gate_at([2*n_code+5, 2*n_code+3], 'CX')
     CNOT_circ = c.Encoded_Gate('Preparation', [CNOT_circ]).circuit_wrap()
 
     # (2) Measure XX between target and ancilla
-    XX_qubits = [[[1,1], [2,1]], [[2,3], [2,5]]]
+    XX_qubits = [[[1,1], [2,1]], [[1,3], [1,5]]]
+    #XX_qubits = [[[1,1], [2,1]], [[1,3], [2,3], [1,5], [2,5]]]
+    #XX_qubits = [[[1,3], [2,3], [1,5], [2,5]], [[1,1], [2,1]]]
     measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X')
     CNOT_circ.join_circuit(measureXX_circ, anc_parallel)
     
     # (3) Measure ZZ between control and ancilla 
-    ZZ_qubits = [[[0,0], [0,4]], [[0,3], [1,3]]]
+    ZZ_qubits = [[[0,0], [0,4]], [[0,3], [2,3]]]
     measureZZ_circ = create_measure_2_logicals(Is_after2q, ZZ_qubits, 'Z')
     CNOT_circ.join_circuit(measureZZ_circ, anc_parallel)
 
     # (4) Do QEC on all 3 logical qubits
     QEC_ctrl = create_EC_subcircs(code, Is_after2q, False)
-    QEC_anc = create_EC_subcircs(code, Is_after2q, False)
     QEC_targ = create_EC_subcircs(code, Is_after2q, False)
+    QEC_anc = create_EC_subcircs(code, Is_after2q, False)
     CNOT_circ.join_circuit(QEC_ctrl, anc_parallel)
-    CNOT_circ.join_circuit_at(range(n_code,2*n_code), QEC_anc)
-    CNOT_circ.join_circuit_at(range(2*n_code,3*n_code), QEC_targ)
+    CNOT_circ.join_circuit_at(range(n_code,2*n_code), QEC_targ)
+    CNOT_circ.join_circuit_at(range(2*n_code,3*n_code), QEC_anc)
 
     # (5) Measure the ancilla in the X basis
     meas_circ = steane.Generator.create_encoded_circuit('MeasureXDestroy')
     meas_circ = c.Encoded_Gate('MeasureX', [meas_circ]).circuit_wrap()
-    CNOT_circ.join_circuit_at(range(n_code, 2*n_code), meas_circ)
+    CNOT_circ.join_circuit_at(range(2*n_code, 3*n_code), meas_circ)
 
     return CNOT_circ
