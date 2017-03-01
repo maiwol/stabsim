@@ -16,6 +16,7 @@ state and likewise return a list of stabs and destabs at the end of the run.
 import sys
 import os
 import time as t
+import random as rd
 import circuit
 from visualizer import browser_vis as brow
 from subprocess import Popen, PIPE
@@ -107,7 +108,8 @@ class Chper(object):
 		self.qubit_num_map = {}	# key = Qubit, value = chp number
 		self.measurement_gates = {} # key is chp number
 		self.results = {}
-		#print stabs, destabs, anc_stabs, anc_destabs
+		#print stabs
+        	#print stabs, destabs, anc_stabs, anc_destabs
 		#t.sleep(5)
 		self.stabs, self.destabs = stabs[:], destabs[:]
 		self.anc_stabs, self.anc_destabs = anc_stabs[:], anc_destabs[:]
@@ -122,6 +124,8 @@ class Chper(object):
 		self.input_states = self.set_input_states(states)[:]
 		self.final_stabs = []
 		self.final_destabs = []
+
+		#print self.case
 
 		self.input_output_files = input_output_files
 		if self.input_output_files:
@@ -485,7 +489,7 @@ class Chper(object):
 		#print 'data destabs:', data_destabs
 		#t.sleep(5)
 
-		#self.set_values_back_to_default()
+		self.set_values_back_to_default()
 
 		#print 'len of stabs =', len(stabs)
 		#print 'number of data qubits =', self.num_d_qub
@@ -535,6 +539,11 @@ class Chper(object):
 		@rtype: L{dict}
 		@return: dictionary of key = qubit number (int) and measurement-random tuple (int, boolean).
 		"""
+
+		r_num = rd.random()
+		#print 'python random =', r_num
+		r_num_int = int(r_num*10**8)
+		#print r_num_int
 		#destabs = ''.join(self.destabs)
 		#stabs = ''.join(self.stabs)
 		#instates = destabs + stabs
@@ -563,7 +572,7 @@ class Chper(object):
 		if self.input_output_files:
 
 			command = ('%s -q %s %s %s %s %s > %s'%(chp_location, self.input_file, 
-							self.input_stab_file, 
+							self.input_stab_file, str(r_num_int),
 							str(num_ancilla), str(num_total), 
 							str(self.n_gates), output_filename))
 
@@ -588,12 +597,16 @@ class Chper(object):
 		
 
 		else:
+			#print 'circ =', self.input_circuit_string
+			#print 'stab =', self.input_stab_string
 			chp_inputs = [chp_location, '-lq', self.input_circuit_string,
-				      self.input_stab_string, str(num_ancilla),
-				      str(num_total), str(self.n_gates)]
+				      self.input_stab_string, str(r_num_int),
+				      str(num_ancilla), str(num_total), str(self.n_gates)]
 			chp_proc = Popen(chp_inputs, stdin=PIPE, stdout=PIPE)
 			output_string, error = chp_proc.communicate()
-			
+			#print output_string
+			#chp_proc.kill
+
 			if error != None:
 				em = 'Error running chp'
 				raise SystemExit(em)			

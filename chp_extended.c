@@ -12,7 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-
+#include <unistd.h>
+#include <fcntl.h>
 
 
 #define         CNOT		0
@@ -349,6 +350,8 @@ int measure(struct QState *q, long b, int sup)
 	long b5;
 	unsigned long pw;
 
+    //srand(time(0));
+
 	b5 = b>>5;
 	pw = q->pw[b&31];
 	for (p = 0; p < q->n; p++)         // loop over stabilizer generators
@@ -360,8 +363,10 @@ int measure(struct QState *q, long b, int sup)
 	// If outcome is indeterminate
 	if (ran)
 	{
+         //printf("Im here");
          rowcopy(q, p, p + q->n);                         // Set Xbar_p := Zbar_p
          rowset(q, p + q->n, b + q->n);                 // Set Zbar_p := Z_b
+         //printf("\n%d", rand());
          q->r[p + q->n] = 2*(rand()%2);                 // moment of quantum randomness
          for (i = 0; i < 2*q->n; i++)                 // Now update the Xbar's and Zbar's that don't commute with
                  if ((i!=p) && (q->x[i][b5]&pw))         // Z_b
@@ -645,7 +650,9 @@ void runprog(struct QProg *h, struct QState *q)
 	time_t tp;
 	double dt;
 	char mvirgin = 1;
-
+    
+    //printf("m = %d", m);
+    
 	time(&tp);
 	for (t = 0; t < h->T; t++)
 	{
@@ -695,6 +702,7 @@ void runprog(struct QProg *h, struct QState *q)
 	 //printf("%ld", q->a);
          //printket(q);
 	}
+
 	return;
 
 }
@@ -1194,11 +1202,22 @@ int main(int argc, char **argv)
 	long a = 0; 	// number of ancilla qubits
 	long n = 0;	// total number of qubits
 	long T = 0;     // total number of gates
+    long randseed = 0;   // the random seed passed from python
 
 	//printf("\nCHP: Efficient Simulator for Stabilizer Quantum Circuits");
 	//printf("\nby Scott Aaronson\n");
-	srand(time(0));
-	if (argc==1) error(0);
+    
+    //printf("time0 = %ju\n", time(0));
+    //int myFile = open("/dev/random", O_RDONLY);
+    //int randseed;
+    //int ret = read(myFile, &randseed, sizeof(randseed));
+    //close(myFile);
+    //printf("randseed = %d\n", randseed);
+    //srand(randseed);
+    
+    //srand(time(0));
+    
+    if (argc==1) error(0);
 	if (argv[1][0]=='-') 
 	{
 	  param = 1;
@@ -1208,8 +1227,24 @@ int main(int argc, char **argv)
 	h = malloc(sizeof(struct QProg));
 	q = malloc(sizeof(struct QState));
 
-	l = strlen(argv[argc-3]);	// number of ancillary qubits
+
+    l = strlen(argv[argc-4]);	// random seed
 	p = 1;
+	for (i = l-1; i > -1; i--)
+	{
+  	 long num = p*(argv[argc-4][i] - '0');
+	 randseed += num;
+	 p *= 10;
+	} 
+    
+    //printf("randseed = %ld\n", randseed);
+    srand(randseed);            // srand with the random seed
+    //printf("rand1 = %d\n", rand());
+    //printf("rand2 = %d\n", rand());
+	
+
+	l = strlen(argv[argc-3]);	// number of ancillary qubits
+    p = 1;
 	for (i = l-1; i > -1; i--)
 	{
 	 long num = p*(argv[argc-3][i] - '0');
@@ -1254,9 +1289,13 @@ int main(int argc, char **argv)
 	  readprog(h,argv[1],NULL,n);
 	}
 	
+    //printf("param = %d\n", param);
+    //printf("argc = %d\n", argc);
 
-	if (argc==(6+param))   	// if instates or stabilizers are specified  
-	{ 
+	if (argc==(7+param))   	// if instates or stabilizers are specified  
+	{
+
+      //printf("Im here");
 	  // if the stab input ends with a 't', it means it is a file.
 	  if (argv[2+param][strlen(argv[2+param])-1] == 't') 
 	  {
