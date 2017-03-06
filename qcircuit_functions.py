@@ -246,7 +246,7 @@ def stabs_QEC_bare_anc(dic, n_first_anc, code):
 
 
 def create_EC_subcircs(code, Is_after2q, initial_I=True,
-                       initial_trans=False):
+                       initial_trans=False, perfect_EC=False):
     '''
     creates circuit for distance-3 QEC: Cross, Shor, 5-qubit for now
     '''
@@ -257,34 +257,60 @@ def create_EC_subcircs(code, Is_after2q, initial_I=True,
     diVincenzo = True
     meas_errors = True
 
-    # Cross code uses bare ancillae
-    if code == 'Cross':
-        Cross_stabs = cross.Code.stabilizer_Colin[:]
-        n_subcircs = 3
-        EC_circ = cor.Bare_Correct.generate_rep_bare_meas(7, Cross_stabs,
-                                                          redun, initial_I,
-                                                          meas_errors,
-                                                          Is_after2q,
-                                                          initial_trans,
-                                                          ancilla_parallel)
-    else:
-        if code == 'Steane':
-            code_stabs = steane.Code.stabilizer[:]
-            n_subcircs = 6
+
+    # This option is only used to do perfect QEC at the end of a 
+    # circuit to distinguish between correctable and uncorrectable
+    # errors
+    if perfect_EC:
+        if code == 'Cross':
+            n_data = 7
+            code_stabs = cross.Code.stabilizer_alt[:]
+        elif code == 'Steane':
+            code_stabs = steane.Code.stabilizer_alt[:]
+            n_data = 7
         elif code == 'fivequbit':
             code_stabs = fivequbit.Code.stabilizer[:]
-            n_subcircs = 3
+            n_data = 5
 
-        EC_circ = cor.Cat_Correct.cat_syndrome_4(code_stabs,
-                                                 redun,
-                                                 verify,
-                                                 ancilla_parallel,
-                                                 diVincenzo,
-                                                 initial_I,
-                                                 initial_trans,
-                                                 code,
-                                                 meas_errors,
-                                                 Is_after2q)
+        EC_circ = cor.Bare_Correct.generate_rep_bare_meas(n_data,
+                                                          code_stabs,
+                                                          1,
+                                                          False,
+                                                          False,
+                                                          False,
+                                                          False,
+                                                          True)
+        
+    else:
+
+        # Cross code uses bare ancillae
+        if code == 'Cross':
+            Cross_stabs = cross.Code.stabilizer_alt[:]
+            n_subcircs = 3
+            EC_circ = cor.Bare_Correct.generate_rep_bare_meas(7, Cross_stabs,
+                                                              redun, initial_I,
+                                                              meas_errors,
+                                                              Is_after2q,
+                                                              initial_trans,
+                                                              ancilla_parallel)
+        else:
+            if code == 'Steane':
+                code_stabs = steane.Code.stabilizer[:]
+                n_subcircs = 6
+            elif code == 'fivequbit':
+                code_stabs = fivequbit.Code.stabilizer[:]
+                n_subcircs = 3
+
+            EC_circ = cor.Cat_Correct.cat_syndrome_4(code_stabs,
+                                                     redun,
+                                                     verify,
+                                                     ancilla_parallel,
+                                                     diVincenzo,
+                                                     initial_I,
+                                                     initial_trans,
+                                                     code,
+                                                     meas_errors,
+                                                     Is_after2q)
 
     return EC_circ
 
@@ -311,11 +337,16 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
             sec_targ = n_code*qubit_pairs[1][0] + qubit_pairs[1][1]
             local_circ.add_gate_at([n_code*3, first_targ], ent_gate)
             local_circ.add_gate_at([n_code*3, sec_targ], ent_gate)
-            if len(qubit_pairs) == 4:
+            if len(qubit_pairs) >= 4:
                 third_targ = n_code*qubit_pairs[2][0] + qubit_pairs[2][1]
                 fourth_targ = n_code*qubit_pairs[3][0] + qubit_pairs[3][1]
                 local_circ.add_gate_at([n_code*3, third_targ], ent_gate)
                 local_circ.add_gate_at([n_code*3, fourth_targ], ent_gate)
+            if len(qubit_pairs) == 6:
+                fifth_targ = n_code*qubit_pairs[4][0] + qubit_pairs[4][1]
+                sixth_targ = n_code*qubit_pairs[5][0] + qubit_pairs[5][1]
+                local_circ.add_gate_at([n_code*3, fifth_targ], ent_gate)
+                local_circ.add_gate_at([n_code*3, sixth_targ], ent_gate)
                 
             if meas_errors:
                 local_circ.add_gate_at([n_code*3], 'ImX')
@@ -332,10 +363,14 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
 
 
 
-def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True):
+def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
+                          EC_ctrl_targ=False):
     '''
     creates the whole supra-circuit for the lattice-surgery CNOT
     exclusive for the Steane code (distance-3 color code)
+    
+    EC_ctrl_targ: True if we want to add QEC on the control and the 
+                  target qubits after the whole procedure.
     '''
     
     code = 'Steane'
@@ -346,33 +381,42 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True):
     #    CNOT_circ.add_gate_at([i], 'I')
 
     # (1) Preparation of the ancilla
-    CNOT_circ.add_gate_at([2*n_code+5], 'H')
-    CNOT_circ.add_gate_at([2*n_code+5, 2*n_code+3], 'CX')
-    CNOT_circ = c.Encoded_Gate('Preparation', [CNOT_circ]).circuit_wrap()
+    #CNOT_circ.add_gate_at([2*n_code+5], 'H')
+    #CNOT_circ.add_gate_at([2*n_code+5, 2*n_code+3], 'CX')
+    #CNOT_circ = c.Encoded_Gate('Preparation', [CNOT_circ]).circuit_wrap()
 
     # (2) Measure XX between target and ancilla
-    XX_qubits = [[[1,1], [2,1]], [[1,3], [1,5]]]
+    #XX_qubits = [[[1,1], [2,1]], [[1,3], [1,5]]]
     #XX_qubits = [[[1,1], [2,1]], [[1,3], [2,3], [1,5], [2,5]]]
     #XX_qubits = [[[1,3], [2,3], [1,5], [2,5]], [[1,1], [2,1]]]
+    XX_qubits = [[[1,1], [1,3], [1,5], [2,1], [2,3], [2,5]]]
     measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X')
     CNOT_circ.join_circuit(measureXX_circ, anc_parallel)
+
+    # (2.1) Do QEC on ancillary logical qubit
+    QEC_anc = create_EC_subcircs(code, Is_after2q, False)
+    CNOT_circ.join_circuit_at(range(2*n_code,3*n_code), QEC_anc)
     
     # (3) Measure ZZ between control and ancilla 
-    ZZ_qubits = [[[0,0], [0,4]], [[0,3], [2,3]]]
+    #ZZ_qubits = [[[0,0], [0,4]], [[0,3], [2,3]]]
+    ZZ_qubits = [[[0,0], [0,3], [0,4], [2,0], [2,3], [2,4]]]
     measureZZ_circ = create_measure_2_logicals(Is_after2q, ZZ_qubits, 'Z')
     CNOT_circ.join_circuit(measureZZ_circ, anc_parallel)
 
-    # (4) Do QEC on all 3 logical qubits
-    QEC_ctrl = create_EC_subcircs(code, Is_after2q, False)
-    QEC_targ = create_EC_subcircs(code, Is_after2q, False)
+    # (4) Do QEC on ancillary logical qubit
     QEC_anc = create_EC_subcircs(code, Is_after2q, False)
-    CNOT_circ.join_circuit(QEC_ctrl, anc_parallel)
-    CNOT_circ.join_circuit_at(range(n_code,2*n_code), QEC_targ)
     CNOT_circ.join_circuit_at(range(2*n_code,3*n_code), QEC_anc)
 
     # (5) Measure the ancilla in the X basis
     meas_circ = steane.Generator.create_encoded_circuit('MeasureXDestroy')
     meas_circ = c.Encoded_Gate('MeasureX', [meas_circ]).circuit_wrap()
     CNOT_circ.join_circuit_at(range(2*n_code, 3*n_code), meas_circ)
+
+    # (6) Do QEC on control and target qubits
+    if EC_ctrl_targ:
+        QEC_ctrl = create_EC_subcircs(code, Is_after2q, False)
+        QEC_targ = create_EC_subcircs(code, Is_after2q, False)
+        CNOT_circ.join_circuit(QEC_ctrl, anc_parallel)
+        CNOT_circ.join_circuit_at(range(n_code,2*n_code), QEC_targ)
 
     return CNOT_circ

@@ -25,7 +25,7 @@ class Code:
                    ['I','I','Z','Z','I','Y','Y'],
                    ['Z','Z','Z','X','Z','Z','I']]
     
-    stabilizer_Colin = [
+    stabilizer_alt = [
                         [('X',0), ('X',4)],
                         [('X',1), ('X',4)],
                         [('X',2), ('X',5)],

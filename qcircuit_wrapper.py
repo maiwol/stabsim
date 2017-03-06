@@ -1,5 +1,6 @@
 import sys
 import circuit as cir
+import steane as st
 import chper_extended as chper
 import qcircuit_functions as qfun
 from visualizer import browser_vis as brow
@@ -48,6 +49,7 @@ class Quantum_Operation(object):
             circuit = self.circuits[circuit]
 
         n_a_q = len(circuit.ancilla_qubits())
+        print 'n_data =', self.n_d_q
         print 'n_anc =', n_a_q
 
         circ_chp = chper.Chper(circ=circuit,
@@ -59,7 +61,11 @@ class Quantum_Operation(object):
                                anc_destabs=[],
                                input_output_files=self.CHP_IO_files)
 
-        dic, self.stabs, self.destabs = circ_chp.run(self.chp_loc)
+        circ_chp_output = circ_chp.run(self.chp_loc)
+        dic = circ_chp_output[0]
+        self.stabs = circ_chp_output[1][:]
+        self.destabs = circ_chp_output[2][:]
+        print 'dict =', dic
 
         return dic
        
@@ -82,32 +88,43 @@ class Measure_2_logicals(Quantum_Operation):
         If they're different we measured that operator again.
         The assumption is that there are 6 circuits.
         '''
-        
-        first4outcomes = []
-        for i in range(4):
+       
+        #brow.from_circuit(self.circuits[0])
+        n_subcircs = len(self.circuits)
+
+        first_outcomes = []
+        for i in range(2*n_subcircs/3):
+            print 'Round', i
+            #print self.stabs
             #for g in self.circuits[i].gates:
                 #print g.gate_name, [q.qubit_id for q in g.qubits] 
             #print self.run_one_circ(i).values()[0]
-            first4outcomes += [self.run_one_circ(i).values()[0][0]]
+            first_outcomes += [self.run_one_circ(i).values()[0][0]]
        
         #print first4outcomes
         #print self.stabs
 
-        outcomes_stab1 = [first4outcomes[0], first4outcomes[2]]
-        outcomes_stab2 = [first4outcomes[1], first4outcomes[3]]
+        #outcomes_stab1 = [first4outcomes[0], first4outcomes[2]]
+        #outcomes_stab2 = [first4outcomes[1], first4outcomes[3]]
 
-        if outcomes_stab1[0] != outcomes_stab1[1]:
-            outcomes_stab1 += [self.run_one_circ(4).values()[0]]
+        #if outcomes_stab1[0] != outcomes_stab1[1]:
+        #    outcomes_stab1 += [self.run_one_circ(4).values()[0][0]]
             
-        if outcomes_stab2[0] != outcomes_stab2[1]:
-            outcomes_stab2 += [self.run_one_circ(5).values()[0]]
+        #if outcomes_stab2[0] != outcomes_stab2[1]:
+        #    outcomes_stab2 += [self.run_one_circ(5).values()[0][0]]
        
-        print outcomes_stab1
-        print outcomes_stab2
-        parity = (outcomes_stab1[-1] + outcomes_stab2[-1])%2
-        print parity
+        if first_outcomes[0] != first_outcomes[1]:
+            first_outcomes += [self.run_one_circ(2).values()[0][0]]
 
-        return parity, len(outcomes_stab1), len(outcomes_stab2)
+        #print outcomes_stab1
+        #print outcomes_stab2
+        #parity = (outcomes_stab1[-1] + outcomes_stab2[-1])%2
+        print first_outcomes
+        parity = first_outcomes[-1]
+        print parity
+        
+        #return parity, len(outcomes_stab1), len(outcomes_stab2)
+        return parity, len(first_outcomes), len(first_outcomes)
 
 
 
@@ -276,8 +293,8 @@ class QEC_d3(Quantum_Operation):
         # update the final states only if a correction
         # is needed, to save some time
         if 'Z' in Z_corr:
-            print 'stabs =', self.stabs
-            print 'Z_corr =', Z_corr
+            #print 'stabs =', self.stabs
+            #print 'Z_corr =', Z_corr
             Z_corr = pre_Is + Z_corr + post_Is
             print 'Z_corr =', Z_corr
             corr_state = qfun.update_stabs(self.stabs,
@@ -327,7 +344,7 @@ class Supra_Circuit(object):
    
         sub_circ = quant_gate.circuit_list[0]
 
-        if quant_gate.gate_name == 'EC_CatCorrect':
+        if quant_gate.gate_name[-7:] == 'Correct':
             
             quant_circs = [g.circuit_list[0] for g in sub_circ.gates]
             q_oper = QEC_d3(self.state[:], quant_circs, self.chp_loc)
@@ -346,6 +363,11 @@ class Supra_Circuit(object):
         elif quant_gate.gate_name[:16] == 'Measure2logicals':
             
             quant_circs = [g.circuit_list[0] for g in sub_circ.gates]
+            #faulty_gate = quant_circs[0].gates[2]
+            #if faulty_gate.gate_name == 'CX':
+                #faulty_qubit = faulty_gate.qubits[1]
+                #err_g = quant_circs[0].insert_gate(faulty_gate, [faulty_qubit], '', 'Z', False)
+                #brow.from_circuit(quant_circs[0], True)
             q_oper = Measure_2_logicals(self.state[:], quant_circs, self.chp_loc)
             parity, n_rep1, n_rep2 = q_oper.run_all()
 
@@ -381,19 +403,63 @@ class CNOT_latt_surg(Supra_Circuit):
         '''
 
         n_repEC = []
+        
+        gate_i = 0
+
         for q_oper in self.quant_opers:
             print q_oper.gate_name
             output = self.run_one_oper(q_oper)
+            
             if q_oper.gate_name == 'EC_CatCorrect':
                 n_repEC += [output]
+            
             elif q_oper.gate_name == 'Measure2logicalsX':
                 parX = output[0]
                 n_rep1X, n_rep2X = output[1]
+                print self.state[0]
+                if parX == 1:
+                    print 'Z correction after M_xx? Yes'
+                    # Z logical on control
+                    Z_corr = ['Z' for i in range(7)] + ['I' for i in range(7*2)]
+                    corr_state = qfun.update_stabs(self.state[0][:],
+                                                   self.state[1][:],
+                                                   Z_corr)
+                    self.state = [corr_state[0][:], corr_state[1][:]]
+                    print 'State after corr:'
+                    print self.state[0]
+
             elif q_oper.gate_name == 'Measure2logicalsZ':
                 parZ = output[0]
                 n_rep1Z, n_rep2Z = output[1]
+                print self.state[0]
+                if parZ == 1:
+                    print 'X correction after M_zz? Yes'
+                    # X logical on target
+                    X_corr = ['I' for i in range(7)]
+                    X_corr += ['X' for i in range(7)]
+                    X_corr += ['I' for i in range(7)]
+                    corr_state = qfun.update_stabs(self.state[0][:],
+                                                   self.state[1][:],
+                                                   X_corr)
+                    self.state = [corr_state[0][:], corr_state[1][:]]
+                    print 'State after corr:'
+                    print self.state[0]
+
             elif q_oper.gate_name == 'MeasureX':
                 meas_dict = output
-                print meas_dict
+                meas_outcomes = [val[0] for val in meas_dict.values()]
+                parXanc = st.Code.parity_meas_Steane_EC(meas_outcomes)
+                print self.state[0]
+                if parXanc == 1:
+                    print 'Z correction after M_x?  Yes'
+                    # Z logical on control
+                    Z_corr = ['Z' for i in range(7)] + ['I' for i in range(7)]
+                    corr_state = qfun.update_stabs(self.state[0][:],
+                                                   self.state[1][:],
+                                                   Z_corr)
+                    self.state = [corr_state[0][:], corr_state[1][:]]
+                    print 'State after corr:'
+                    print self.state[0]
 
-            print self.state[0], '\n'
+        return None
+
