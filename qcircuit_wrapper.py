@@ -134,7 +134,7 @@ class QEC_d3(Quantum_Operation):
     Inherits from class Quantum_Operation
     '''
 
-    def run_one_bare_anc(self, circuit, code):
+    def run_one_bare_anc(self, circuit, code, stab_kind):
         '''
         runs one round of QEC for the whole set of stabilizers
         assuming bare ancillae.
@@ -145,11 +145,31 @@ class QEC_d3(Quantum_Operation):
         # large-distance tological codes.
 
         output_dict = self.run_one_circ(circuit)
-        n_first_anc = min(output_dict.keys())
-        data_errors = qfun.stabs_QEC_bare_anc(output_dict,
-                                              n_first_anc,
-                                              code)
-        
+        if stab_kind == 'both':
+            anc_qubit_list = sorted(output_dict.keys())
+            
+            # X stabilizers come first by convention
+            n_first_anc_X = min(anc_qubit_list)
+            X_dict = {key: output_dict[key] 
+                           for key in anc_qubit_list[:3]}
+            Z_errors = qfun.stabs_QEC_bare_anc(X_dict,
+                                               n_first_anc_X,
+                                               code)
+            Z_errors = ['Z' if oper=='E' else oper for oper in Z_errors]
+            
+            # Z stabilizers come second
+            n_first_anc_Z = min(anc_qubit_list[3:])
+            Z_dict = {key: output_dict[key] 
+                           for key in anc_qubit_list[3:]} 
+            
+            X_errors = qfun.stabs_QEC_bare_anc(Z_dict,
+                                               n_first_anc_Z,
+                                               code)
+            X_errors = ['X' if oper=='E' else oper for oper in X_errors]
+       
+            data_errors = Z_errors, X_errors
+
+
         return data_errors
 
 
@@ -264,30 +284,40 @@ class QEC_d3(Quantum_Operation):
         print 'post =', post_ns
 
         Z_data_errors, X_data_errors = [], []
+
+        # this is the case if we are just trying to
+        # perfect EC to distinguish between correctable
+        # and uncorrectable errors.
+        if len(self.circuits) == 1:
+            Z_corr, X_corr = QEC_func(0, code, 'both')
+            Z_data_errors = [Z_corr]
+            X_data_errors = [X_corr]
+
+        else:
+
+            # run first 4 subcircuits (X stabs first)
+            for i in range(2):
+                #print 'stabs =', self.stabs
+                Z_data_errors += [QEC_func(2*i, code, 'X')]
+                #print 'Z errors =', Z_data_errors
+                X_data_errors += [QEC_func(2*i+1, code, 'Z')]
+                #print 'X errors =', X_data_errors
+
+            #print 'stabs after 2 =', self.stabs
+
+            # if the outcomes of the 2 X stabs measurements
+            # don't coincide, do it a third time
+            if Z_data_errors[0] != Z_data_errors[1]:
+                Z_data_errors += [QEC_func(4, code, 'X')]
         
-        # run first 4 subcircuits (X stabs first)
-        for i in range(2):
-            #print 'stabs =', self.stabs
-            Z_data_errors += [QEC_func(2*i, code, 'X')]
-            #print 'Z errors =', Z_data_errors
-            X_data_errors += [QEC_func(2*i+1, code, 'Z')]
-            #print 'X errors =', X_data_errors
+            # same for the Z stabs
+            if X_data_errors[0] != X_data_errors[1]:
+                X_data_errors += [QEC_func(5, code, 'Z')]
 
-        #print 'stabs after 2 =', self.stabs
+            print 'X_errors =', X_data_errors
+            print 'Z_errors =', Z_data_errors
 
-        # if the outcomes of the 2 X stabs measurements
-        # don't coincide, do it a third time
-        if Z_data_errors[0] != Z_data_errors[1]:
-            Z_data_errors += [QEC_func(4, code, 'X')]
-        
-        # same for the Z stabs
-        if X_data_errors[0] != X_data_errors[1]:
-            X_data_errors += [QEC_func(5, code, 'Z')]
-
-        print 'X_errors =', X_data_errors
-        print 'Z_errors =', Z_data_errors
-
-        Z_corr, X_corr = Z_data_errors[-1], X_data_errors[-1]
+            Z_corr, X_corr = Z_data_errors[-1], X_data_errors[-1]
         
 
         # update the final states only if a correction
@@ -295,7 +325,7 @@ class QEC_d3(Quantum_Operation):
         if 'Z' in Z_corr:
             #print 'stabs =', self.stabs
             #print 'Z_corr =', Z_corr
-            Z_corr = pre_Is + Z_corr + post_Is
+            Z_corr = pre_Is[:] + Z_corr[:] + post_Is[:]
             print 'Z_corr =', Z_corr
             corr_state = qfun.update_stabs(self.stabs,
                                            self.destabs,
@@ -304,7 +334,7 @@ class QEC_d3(Quantum_Operation):
             self.destabs = corr_state[1][:]
         
         if 'X' in X_corr:
-            X_corr = pre_Is + X_corr + post_Is
+            X_corr = pre_Is[:] + X_corr[:] + post_Is[:]
             corr_state = qfun.update_stabs(self.stabs,
                                            self.destabs,
                                            X_corr)
@@ -410,8 +440,9 @@ class CNOT_latt_surg(Supra_Circuit):
             print q_oper.gate_name
             output = self.run_one_oper(q_oper)
             
-            if q_oper.gate_name == 'EC_CatCorrect':
+            if q_oper.gate_name[-7:] == 'Correct':
                 n_repEC += [output]
+                print 'State after EC =', self.state[0]
             
             elif q_oper.gate_name == 'Measure2logicalsX':
                 parX = output[0]

@@ -223,23 +223,34 @@ def stabs_QEC_bare_anc(dic, n_first_anc, code):
     data errors.
     '''
 
-    # so far only for Cross (need to implement it for surface-17)
+    # so far only for Cross and Steane (need to implement it for surface-17)
 
     if code == 'Cross':
         n_q = 7
         len_dic = 6
         code_class = cross.Code
     
+        outcome = [dic[n_first_anc + i][0] for i in range(len_dic)]
+        outcome_integer = 0
+        for i in range(len(outcome)):
+            outcome_integer += outcome[i]*2**(5-i)
+    
+        corr = code_class.complete_lookup_table[outcome_integer]
+
+    elif code == 'Steane':
+        n_q = 7
+        len_dic = 3
+        code_class = steane.Code
+
+        outcome = [dic[n_first_anc + i][0] for i in range(len_dic)]
+        corr = code_class.stabilizer_syndrome_dict[tuple(outcome)]
+       
+            
+
     if len(dic) != len_dic:
         raise IndexError('The dict does not have the right length.')
         
 
-    outcome = [dic[n_first_anc + i][0] for i in range(len_dic)]
-    outcome_integer = 0
-    for i in range(len(outcome)):
-        outcome_integer += outcome[i]*2**(5-i)
-    
-    corr = code_class.complete_lookup_table[outcome_integer]
     
     return corr
 

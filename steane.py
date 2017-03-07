@@ -98,6 +98,7 @@ class Code:
                     (1,1,1):["I","I","I","I","I","I","E"]}
 
     # stabilizers in CHP-friendly format
+    
     stabilizer_CHP = [
                         '+XIXIXIX',
                         '+IXXIIXX',
@@ -116,15 +117,54 @@ class Code:
                         '+IIIIXXX'
                        ]
 
-    stabilizer_logical_CHP = {'+Z': '+ZZZIIII',
-                              '-Z': '-ZZZIIII',
-                              '+X': '+XXXIIII',
-                              '-X': '-XXXIIII'}
+    stabilizer_CHP_Z = [
+                        '+XIXIXIX',
+                        '+IXXIIXX',
+                        '+IIIXXXX',
+                        '+ZZIZIIZ',
+                        '+IZIIZIZ',
+                        '+IIZZIIZ',
+                        '+IIIZZZZ'
+                       ]
 
-    destabilizer_logical_CHP = {'+Z': '+IIXIXXI',
-                                '-Z': '+IIXIXXI',
-                                '+X': '+IIZIZZI',
-                                '-X': '+IIZIZZI'}
+    destabilizer_CHP_Z = [
+                           '+ZIIIIII',
+                           '+IZIIIII',
+                           '+IIIZIII',
+                           '+IIXIXIX',
+                           '+IIIIXXI',
+                           '+IIXIIII',
+                           '+IIIIIXI'
+                          ]
+
+    stabilizer_CHP_X = [
+                         '+XXXIIII',
+                         '+IXXXXII',
+                         '+IIXIXXI',
+                         '+IIIXXXX',
+                         '+ZIZIZIZ',
+                         '+IZZIIZZ',
+                         '+IIIZZZZ'
+                       ]
+
+    destabilizer_CHP_X = [
+                           '+IIZIZIZ',
+                           '+IIIIZZI',
+                           '+IIIIIZZ',
+                           '+IIIIIIZ',
+                           '+XIIIIII',
+                           '+IXIIIII',
+                           '+IIIXIII'
+                         ]
+
+    
+    stabilizer_logical_CHP = {'+Z': stabilizer_CHP_Z,
+                              '+X': stabilizer_CHP_X,
+                             }
+
+    destabilizer_logical_CHP = {'+Z': destabilizer_CHP_Z,
+                                '+X': destabilizer_CHP_X,
+                               }
 
 
 

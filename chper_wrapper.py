@@ -1442,11 +1442,10 @@ def prepare_stabs_Steane(init_state, chp_loc='./chp_extended',
     Prepares initial stabilizers and destabilizers
     specifically for Steane
     '''
-    stabs = steane.Code.stabilizer_CHP[:]
-    destabs = steane.Code.destabilizer_CHP[:]
+
     try:
-        stabs += [steane.Code.stabilizer_logical_CHP[init_state]]
-        destabs += [steane.Code.destabilizer_logical_CHP[init_state]] 
+        stabs = steane.Code.stabilizer_logical_CHP[init_state]
+        destabs = steane.Code.destabilizer_logical_CHP[init_state]
     except KeyError:
         if init_state == '+Y':
             init_circ = cor.Steane_Correct.encoded_plus_i_Steane()
