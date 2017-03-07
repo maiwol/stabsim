@@ -21,7 +21,7 @@ CNOT_circuits = qfun.create_latt_surg_CNOT(Is_after2q)
 #faulty_qubit = faulty_gate.qubits[1]
 #new_g = circuits[0].insert_gate(faulty_gate, [faulty_qubit], '', 'Y', False)
 #new_g.is_error = True
-#brow.from_circuit(circuits, True)
+#brow.from_circuit(CNOT_circuits, True)
 #i = 0
 #for supra_gate in circuits.gates:
 #    i += 1
@@ -81,5 +81,38 @@ def run_latt_surg_circ(init_state, circuits):
     
     return fail
 
-print run_latt_surg_circ(initial_state, CNOT_circuits)
+
+
+
+for supra_gate in CNOT_circuits.gates:
+    if supra_gate.gate_name == 'Logical_I':
+        supra_i = CNOT_circuits.gates.index(supra_gate)
+        print 'Supra index =', supra_i
+        in_gates = supra_gate.circuit_list[0].gates
+        
+        for faulty_gate in in_gates:
+            in_i = in_gates.index(faulty_gate)
+            print 'Inside index =', in_i
+            
+            for Pauli_error in ['X', 'Y', 'Z']:
+                print 'Error =', Pauli_error
+                clean_circuits = qfun.create_latt_surg_CNOT(Is_after2q)
+                clean_faulty_g = clean_circuits.gates[supra_i].circuit_list[0].gates[in_i]
+                clean_faulty_q = clean_faulty_g.qubits[0]
+                error_g = clean_circuits.gates[supra_i].circuit_list[0].insert_gate(clean_faulty_g,
+                                                                                    [clean_faulty_q],
+                                                                                    '',
+                                                                                    Pauli_error,
+                                                                                    False)
+                error_g.is_error = True
+
+                init_state_copy = initial_state[0][:], initial_state[1][:]
+                brow.from_circuit(clean_circuits, True)
+                fail = run_latt_surg_circ(init_state_copy, clean_circuits)
+
+                print fail
+
+                sys.exit(0)
+
+
     
