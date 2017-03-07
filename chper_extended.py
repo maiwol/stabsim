@@ -540,10 +540,12 @@ class Chper(object):
 		@return: dictionary of key = qubit number (int) and measurement-random tuple (int, boolean).
 		"""
 
+		# New part: this is where we generate the random number
+		# that will be used as seed in CHP.  MGA: 03/02/2017.
 		r_num = rd.random()
-		#print 'python random =', r_num
 		r_num_int = int(r_num*10**8)
-		#print r_num_int
+		
+		#print 'rand int =', r_num_int
 		#destabs = ''.join(self.destabs)
 		#stabs = ''.join(self.stabs)
 		#instates = destabs + stabs
