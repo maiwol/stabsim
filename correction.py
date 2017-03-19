@@ -447,22 +447,35 @@ class Cat_Correct:
                 cat_synd_circ.add_gate_at([i], initial_trans)
 
         if code == 'Steane':
-            X_stabs = stabilizer_list[:3]
-            Z_stabs = stabilizer_list[3:]
-            for i in range(redundancy):
-                stab_circX = Cat_Correct.create_4_cat_stabilizer(n_data, initial_I, 
-                                                                 X_stabs, cat_circ, 
-                                                                'X_stabs_Steane_', 
-                                                                 i+1, meas_errors,
-                                                                 Is_after_two)
-                cat_synd_circ.join_circuit(stab_circX, ancilla_parallel)
-                initial_I = False
-                stab_circZ = Cat_Correct.create_4_cat_stabilizer(n_data, initial_I, 
-                                                                 Z_stabs, cat_circ, 
-                                                                'Z_stabs_Steane_', 
-                                                                 i+1, meas_errors,
-                                                                 Is_after_two)
-                cat_synd_circ.join_circuit(stab_circZ, ancilla_parallel)
+
+            if n_stab < 6:
+                stabs = stabilizer_list[:]
+                for i in range(redundancy):
+                    stab_circ = Cat_Correct.create_4_cat_stabilizer(n_data, initial_I, 
+                                                                    stabs, cat_circ, 
+                                                                    'stabs_Steane_', 
+                                                                    i+1, meas_errors,
+                                                                    Is_after_two)
+                    cat_synd_circ.join_circuit(stab_circ, ancilla_parallel)
+                
+
+            else:
+                X_stabs = stabilizer_list[:3]
+                Z_stabs = stabilizer_list[3:]
+                for i in range(redundancy):
+                    stab_circX = Cat_Correct.create_4_cat_stabilizer(n_data, initial_I, 
+                                                                     X_stabs, cat_circ, 
+                                                                    'X_stabs_Steane_', 
+                                                                     i+1, meas_errors,
+                                                                     Is_after_two)
+                    cat_synd_circ.join_circuit(stab_circX, ancilla_parallel)
+                    initial_I = False
+                    stab_circZ = Cat_Correct.create_4_cat_stabilizer(n_data, initial_I, 
+                                                                     Z_stabs, cat_circ, 
+                                                                    'Z_stabs_Steane_', 
+                                                                     i+1, meas_errors,
+                                                                     Is_after_two)
+                    cat_synd_circ.join_circuit(stab_circZ, ancilla_parallel)
 
 
         elif code == '5qubit':

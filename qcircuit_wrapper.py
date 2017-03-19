@@ -78,7 +78,7 @@ class Measure_2_logicals(Quantum_Operation):
     Inherits from class Quantum_Operation.
     '''
     
-    def run_all(self):
+    def run_all(self, stab_kind):
         '''
         Run the whole circuit.
         Currently just for a distance-3 code.
@@ -89,17 +89,135 @@ class Measure_2_logicals(Quantum_Operation):
         The assumption is that there are 6 circuits.
         '''
        
-        #brow.from_circuit(self.circuits[0])
+        #brow.from_circuit(self.circuits[1])
         n_subcircs = len(self.circuits)
+        #print n_subcircs
+        #sys.exit(0)
 
-        first_outcomes = []
-        for i in range(2*n_subcircs/3):
-            print 'Round', i
+        
+        # (1) Measure M first time
+        first_M = self.run_one_circ(0).values()[0][0]
+        print 'First M =', first_M
+        
+
+        # (2) Measure stabilizers first time
+        data_qs = self.circuits[1].data_qubits()
+        data_q_ids = [q.qubit_id for q in data_qs]
+        pre_ns = min(data_q_ids)
+        pre_Is = ['I' for i in range(pre_ns)]
+        post_ns = len(self.stabs) - max(data_q_ids) - 1
+        post_Is = ['I' for i in range(post_ns)]
+        
+        output_dict = self.run_one_circ(1)
+        n_first_anc = min(output_dict.keys())
+
+        data_errors1, hook_errors = qfun.stabs_QEC_diVin(output_dict,
+                                                        n_first_anc,
+                                                        'Steane',
+                                                        stab_kind)
+
+        if hook_errors.count('I') != len(hook_errors):
+            hook_errors = pre_Is + hook_errors + post_Is
+            corr_state = qfun.update_stabs(self.stabs,
+                                           self.destabs,
+                                           hook_errors)
+       
+            self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
+
+
+        print 'data errors 1 =', data_errors1
+
+
+
+        # (3) Measure M second time
+        second_M = self.run_one_circ(2).values()[0][0]
+        print 'Second M =', second_M
+
+        
+        if data_errors1.count('I') == 7:
+        
+            if first_M == second_M:
+                return first_M, 'normal'
+
+            else:
+                third_M = self.run_one_circ(4).values()[0][0]
+                return third_M, 'normal'
+
+
+        else:
+            
+            # (4) Measure stabilizers second time
+            data_qs = self.circuits[3].data_qubits()
+            data_q_ids = [q.qubit_id for q in data_qs]
+            pre_ns = min(data_q_ids)
+            pre_Is = ['I' for i in range(pre_ns)]
+            post_ns = len(self.stabs) - max(data_q_ids) - 1
+            post_Is = ['I' for i in range(post_ns)]
+        
+            output_dict = self.run_one_circ(3)
+            n_first_anc = min(output_dict.keys())
+
+            data_errors2, hook_errors = qfun.stabs_QEC_diVin(output_dict,
+                                                            n_first_anc,
+                                                            'Steane',
+                                                            stab_kind)
+
+            if hook_errors.count('I') != len(hook_errors):
+                hook_errors = pre_Is + hook_errors + post_Is
+                corr_state = qfun.update_stabs(self.stabs,
+                                               self.destabs,
+                                               hook_errors)
+       
+                self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
+
+                print 'data errors 2 =', data_errors2
+
+            
+            if data_errors1 == data_errors2:
+                
+                if first_M == second_M:
+
+                    if stab_kind == 'X':
+                        err_i = data_errors1.index('Z')
+                        if err_i in [1,3,5]:  
+                            corr_type = 'alternative'
+                        else:  
+                            corr_type = 'normal'
+
+                    elif stab_kind == 'Z':
+                        err_i = data_errors1.index('X')
+                        if err_i in [0,3,4]:
+                            corr_type = 'alternative'
+                        else:
+                            corr_type = 'normal'
+
+                    return first_M, corr_type
+
+                
+                else:
+                    third_M = self.run_one_circ(4).values()[0][0]
+                    return third_M, 'normal'
+
+            else:
+                
+                if first_M == second_M:
+                    return first_M, 'normal'
+
+                else:
+                    third_M = self.run_one_circ(4).values()[0][0]
+                    return third_M, 'normal'
+                    
+
+
+
+        #first_outcomes = []
+        #for i in range(2*n_subcircs/3):
+            #print 'Round', i
             #print self.stabs
             #for g in self.circuits[i].gates:
                 #print g.gate_name, [q.qubit_id for q in g.qubits] 
             #print self.run_one_circ(i).values()[0]
-            first_outcomes += [self.run_one_circ(i).values()[0][0]]
+            #first_outcomes += [self.run_one_circ(i).values()[0][0]]
        
         #print first4outcomes
         #print self.stabs
@@ -113,18 +231,18 @@ class Measure_2_logicals(Quantum_Operation):
         #if outcomes_stab2[0] != outcomes_stab2[1]:
         #    outcomes_stab2 += [self.run_one_circ(5).values()[0][0]]
        
-        if first_outcomes[0] != first_outcomes[1]:
-            first_outcomes += [self.run_one_circ(2).values()[0][0]]
+        #if first_outcomes[0] != first_outcomes[1]:
+            #first_outcomes += [self.run_one_circ(2).values()[0][0]]
 
         #print outcomes_stab1
         #print outcomes_stab2
         #parity = (outcomes_stab1[-1] + outcomes_stab2[-1])%2
-        print first_outcomes
-        parity = first_outcomes[-1]
-        print parity
+        #print first_outcomes
+        #parity = first_outcomes[-1]
+        #print parity
         
         #return parity, len(outcomes_stab1), len(outcomes_stab2)
-        return parity, len(first_outcomes), len(first_outcomes)
+        #return parity, len(first_outcomes), len(first_outcomes)
 
 
 
@@ -399,13 +517,16 @@ class Supra_Circuit(object):
                 #err_g = quant_circs[0].insert_gate(faulty_gate, [faulty_qubit], '', 'Z', False)
                 #brow.from_circuit(quant_circs[0], True)
             q_oper = Measure_2_logicals(self.state[:], quant_circs, self.chp_loc)
-            parity, n_rep1, n_rep2 = q_oper.run_all()
+            #parity, n_rep1, n_rep2 = q_oper.run_all(quant_gate.gate_name[16])
+            parity, corr_type = q_oper.run_all(quant_gate.gate_name[16])
 
-            print parity, n_rep1, n_rep2
+            print 'parity =', parity
+            print 'corr type =', corr_type
 
             self.state = [q_oper.stabs[:], q_oper.destabs[:]]
             
-            return parity, (n_rep1, n_rep2)
+            #return parity, (n_rep1, n_rep2)
+            return parity, corr_type
 
 
         else:
@@ -446,9 +567,12 @@ class CNOT_latt_surg(Supra_Circuit):
             
             elif q_oper.gate_name == 'Measure2logicalsX':
                 parX = output[0]
-                n_rep1X, n_rep2X = output[1]
+                corr_type = output[1]
+                #n_rep1X, n_rep2X = output[1]
                 print self.state[0]
-                if parX == 1:
+                clause1 = corr_type == 'normal' and parX == 1
+                clause2 = corr_type == 'alternative' and parX == 0
+                if clause1 or clause2:
                     print 'Z correction after M_xx? Yes'
                     # Z logical on control
                     Z_corr = ['Z' for i in range(7)] + ['I' for i in range(7*2)]
@@ -459,11 +583,15 @@ class CNOT_latt_surg(Supra_Circuit):
                     print 'State after corr:'
                     print self.state[0]
 
+
             elif q_oper.gate_name == 'Measure2logicalsZ':
                 parZ = output[0]
-                n_rep1Z, n_rep2Z = output[1]
+                corr_type = output[1]
+                #n_rep1Z, n_rep2Z = output[1]
                 print self.state[0]
-                if parZ == 1:
+                clause1 = corr_type == 'normal' and parZ == 1
+                clause2 = corr_type == 'alternative' and parZ == 0
+                if clause1 or clause2:
                     print 'X correction after M_zz? Yes'
                     # X logical on target
                     X_corr = ['I' for i in range(7)]
