@@ -1,4 +1,5 @@
 import sys
+import copy
 import circuit as c
 import cross
 import steane
@@ -330,8 +331,12 @@ def create_EC_subcircs(code, Is_after2q, initial_I=True,
 
 
 def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
-                              meas_errors=True, FT_meas=True):
+                              meas_errors=True, FT_meas=True,
+                              QEC_before=False):
     '''
+    QEC_before: adds a single QEC step on the ancillary logical
+    qubit just to ensure that the X stabilizers are defined
+    (in case we start with a product state of |0>).
     '''
 
     redun = 3
@@ -350,6 +355,22 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
         #QEC_stabs = [steane.Code.stabilizer[0], steane.Code.stabilizer[1]]
         QEC_stabs = steane.Code.stabilizer[:3]
        
+            
+    if QEC_before:        
+            
+        EC_circ = cor.Cat_Correct.cat_syndrome_4(QEC_stabs,
+                                                 1,
+                                                 False,
+                                                 ancilla_parallel,
+                                                 True,
+                                                 True,
+                                                 False,
+                                                 'Steane',
+                                                 meas_errors,
+                                                 Is_after2q)
+
+        # add QEC on ancillary logical qubit
+        measure_circ.join_circuit_at(range(2*n_code,3*n_code), EC_circ)
 
 
     for i in range(redun):
@@ -428,16 +449,72 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
                                                      meas_errors,
                                                      Is_after2q)
 
+            # QEC on ancillary logical qubit
+            EC_circ_anc = copy.deepcopy(EC_circ)
+
             if logicals == 'Z':
                 measure_circ.join_circuit_at(range(n_code), EC_circ)
             elif logicals == 'X':
                 measure_circ.join_circuit_at(range(n_code,2*n_code), EC_circ)
+            
+            # add QEC on ancillary logical qubit
+            measure_circ.join_circuit_at(range(2*n_code,3*n_code), EC_circ_anc)
 
 
     full_gatename = 'Measure2logicals' + logicals
     measure_circ = c.Encoded_Gate(full_gatename, [measure_circ]).circuit_wrap()
 
     return measure_circ
+
+
+
+def create_joint_EC(Is_after2q, logicals, non_anc_qubit='targ'):
+    '''
+    creates a supra-gate with two QEC steps: one on the ancillary
+    logical qubit and the other on the qubit given as an input.
+    '''
+    
+    n_code = 7
+    ancilla_parallel = True
+    meas_errors = True
+
+    if logicals == 'Z':
+        QEC_stabs = steane.Code.stabilizer[3:6]
+    elif logicals == 'X':
+        QEC_stabs = steane.Code.stabilizer[:3]
+
+    
+    if non_anc_qubit == 'ctrl':
+        non_anc_range = range(n_code)
+    elif non_anc_qubit == 'targ':
+        non_anc_range = range(n_code, 2*n_code)
+    
+    
+    QEC_circ = c.Circuit()
+
+    EC_circ = cor.Cat_Correct.cat_syndrome_4(QEC_stabs,
+                                             3,
+                                             False,
+                                             ancilla_parallel,
+                                             True,
+                                             True,
+                                             False,
+                                             'Steane',
+                                             meas_errors,
+                                             Is_after2q)
+
+    # QEC on ancillary logical qubit
+    EC_circ_anc = copy.deepcopy(EC_circ)
+
+    QEC_circ.join_circuit_at(non_anc_range, EC_circ)
+            
+    # add QEC on ancillary logical qubit
+    QEC_circ.join_circuit_at(range(2*n_code,3*n_code), EC_circ_anc)
+    
+    full_gatename = 'JointQEC' + logicals
+    QEC_circ = c.Encoded_Gate(full_gatename, [QEC_circ]).circuit_wrap()
+
+    return QEC_circ
 
 
 
@@ -484,11 +561,11 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
 
     # (2) Measure XX between target and ancilla
     #XX_qubits = [[[1,1], [2,1]], [[1,3], [1,5]]]
-    #XX_qubits = [[[1,1], [2,1]], [[1,3], [2,3], [1,5], [2,5]]]
+    XX_qubits = [[[1,1], [2,1]], [[1,3], [2,3], [1,5], [2,5]]]
     #XX_qubits = [[[1,3], [2,3], [1,5], [2,5]], [[1,1], [2,1]]]
-    XX_qubits = [[[1,1], [1,3], [1,5], [2,1], [2,3], [2,5]]]
-    measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X')
-    CNOT_circ.join_circuit(measureXX_circ, anc_parallel)
+    #XX_qubits = [[[1,1], [1,3], [1,5], [2,1], [2,3], [2,5]]]
+    measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X', True, True, True)
+    CNOT_circ.join_circuit_at(range(n_code, 3*n_code), measureXX_circ)
 
     I_circuit = create_I_circuit(3*n_code)
     CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
@@ -496,7 +573,13 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
     # (2.1) Do QEC on ancillary logical qubit
     #QEC_anc = create_EC_subcircs(code, Is_after2q, False)
     #CNOT_circ.join_circuit_at(range(2*n_code,3*n_code), QEC_anc)
+   
+    # (3) Perform joint QEC on target and ancilla 
+    # (only if XX and XXXX were measured) 
+    jointQEC_circ = create_joint_EC(Is_after2q, 'Z', non_anc_qubit='targ')
+    CNOT_circ.join_circuit_at(range(n_code, 3*n_code), jointQEC_circ)
     
+
     #I_circuit = create_I_circuit(n_code)
     #CNOT_circ.join_circuit_at(range(2*n_code,3*n_code), I_circuit)
     
