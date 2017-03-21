@@ -344,6 +344,9 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
     ent_gate = 'C' + logicals
     enc_gate_name = 'Partial_measurement'
     ancilla_parallel = True
+
+    if len(qubits) == 1:  extra_name = ''
+    elif len(qubits) == 2:  extra_name = 'long'
     
     measure_circ = c.Circuit()
     
@@ -456,12 +459,16 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
                 measure_circ.join_circuit_at(range(n_code), EC_circ)
             elif logicals == 'X':
                 measure_circ.join_circuit_at(range(n_code,2*n_code), EC_circ)
+                # add QEC on ancillary logical qubit
+                measure_circ.join_circuit_at(range(2*n_code,3*n_code), EC_circ_anc)
             
+
+            ####################### TEMPORARY
             # add QEC on ancillary logical qubit
-            measure_circ.join_circuit_at(range(2*n_code,3*n_code), EC_circ_anc)
+            #measure_circ.join_circuit_at(range(2*n_code,3*n_code), EC_circ_anc)
 
 
-    full_gatename = 'Measure2logicals' + logicals
+    full_gatename = 'Measure2logicals' + logicals + extra_name
     measure_circ = c.Encoded_Gate(full_gatename, [measure_circ]).circuit_wrap()
 
     return measure_circ
@@ -555,9 +562,9 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
     #CNOT_circ.add_gate_at([2*n_code+5, 2*n_code+3], 'CX')
     #CNOT_circ = c.Encoded_Gate('Preparation', [CNOT_circ]).circuit_wrap()
 
-    I_circuit = create_I_circuit(2*n_code)
+    I_circuit = create_I_circuit(n_code)
     #I_circuit = create_I_circuit(n_code)
-    CNOT_circ.join_circuit_at(range(2*n_code), I_circuit)
+    CNOT_circ.join_circuit_at(range(2*n_code, 3*n_code), I_circuit)
 
     # (2) Measure XX between target and ancilla
     #XX_qubits = [[[1,1], [2,1]], [[1,3], [1,5]]]
