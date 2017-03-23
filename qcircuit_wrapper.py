@@ -69,6 +69,44 @@ class Quantum_Operation(object):
 
         return dic
        
+    
+    
+    def run_one_diVincenzo(self, circuit, code, stab_kind=None):
+        '''
+        runs one round of X or Z stabilizers (for a CSS code)
+        or the whole set of stabilizers (for a non-CSS code)
+        assuming the ancillae are in an unverified cat state.
+        circuit refers to the index of the circuit to be run.
+        Based on "code", we then correct the hook errors and
+        return the data errors.
+        '''
+
+        data_qs = self.circuits[circuit].data_qubits()
+        data_q_ids = [q.qubit_id for q in data_qs]
+        pre_ns = min(data_q_ids)
+        pre_Is = ['I' for i in range(pre_ns)]
+        post_ns = len(self.stabs) - max(data_q_ids) - 1
+        post_Is = ['I' for i in range(post_ns)]
+        
+        output_dict = self.run_one_circ(circuit)
+        n_first_anc = min(output_dict.keys())
+        data_errors, hook_errors = qfun.stabs_QEC_diVin(output_dict,
+                                                        n_first_anc,
+                                                        code,
+                                                        stab_kind)
+
+        if hook_errors.count('I') != len(hook_errors):
+            hook_errors = pre_Is + hook_errors + post_Is
+            corr_state = qfun.update_stabs(self.stabs,
+                                           self.destabs,
+                                           hook_errors)
+       
+            self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
+
+        return data_errors
+
+
+
 
 
 class Measure_2_logicals(Quantum_Operation):
@@ -89,6 +127,9 @@ class Measure_2_logicals(Quantum_Operation):
         The assumption is that there are 6 circuits.
         '''
        
+        QEC_func = self.run_one_diVincenzo
+        code = 'Steane'
+
         #brow.from_circuit(self.circuits[1])
         n_subcircs = len(self.circuits)
         #print n_subcircs
@@ -99,46 +140,17 @@ class Measure_2_logicals(Quantum_Operation):
         first_M = self.run_one_circ(0).values()[0][0]
         print 'First M =', first_M
         
-
         # (2) Measure stabilizers first time
-        data_qs = self.circuits[1].data_qubits()
-        data_q_ids = [q.qubit_id for q in data_qs]
-        pre_ns = min(data_q_ids)
-        pre_Is = ['I' for i in range(pre_ns)]
-        post_ns = len(self.stabs) - max(data_q_ids) - 1
-        post_Is = ['I' for i in range(post_ns)]
-        
-        output_dict = self.run_one_circ(1)
-        n_first_anc = min(output_dict.keys())
-
-        data_errors1, hook_errors = qfun.stabs_QEC_diVin(output_dict,
-                                                        n_first_anc,
-                                                        'Steane',
-                                                        stab_kind)
-
-        if hook_errors.count('I') != len(hook_errors):
-            hook_errors = pre_Is + hook_errors + post_Is
-            corr_state = qfun.update_stabs(self.stabs,
-                                           self.destabs,
-                                           hook_errors)
-       
-            self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
-
-
+        data_errors1 = QEC_func(1, code, stab_kind)
         print 'data errors 1 =', data_errors1
-
-
 
         # (3) Measure M second time
         second_M = self.run_one_circ(2).values()[0][0]
         print 'Second M =', second_M
 
-        
         if data_errors1.count('I') == 7:
-        
             if first_M == second_M:
                 return first_M, 'normal'
-
             else:
                 third_M = self.run_one_circ(4).values()[0][0]
                 return third_M, 'normal'
@@ -147,36 +159,11 @@ class Measure_2_logicals(Quantum_Operation):
         else:
             
             # (4) Measure stabilizers second time
-            data_qs = self.circuits[3].data_qubits()
-            data_q_ids = [q.qubit_id for q in data_qs]
-            pre_ns = min(data_q_ids)
-            pre_Is = ['I' for i in range(pre_ns)]
-            post_ns = len(self.stabs) - max(data_q_ids) - 1
-            post_Is = ['I' for i in range(post_ns)]
-        
-            output_dict = self.run_one_circ(3)
-            n_first_anc = min(output_dict.keys())
+            data_errors2 = QEC_func(3, code, stab_kind)
+            print 'data errors 2 =', data_errors2
 
-            data_errors2, hook_errors = qfun.stabs_QEC_diVin(output_dict,
-                                                            n_first_anc,
-                                                            'Steane',
-                                                            stab_kind)
-
-            if hook_errors.count('I') != len(hook_errors):
-                hook_errors = pre_Is + hook_errors + post_Is
-                corr_state = qfun.update_stabs(self.stabs,
-                                               self.destabs,
-                                               hook_errors)
-       
-                self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
-
-                print 'data errors 2 =', data_errors2
-
-            
             if data_errors1 == data_errors2:
-                
                 if first_M == second_M:
-
                     if stab_kind == 'X':
                         err_i = data_errors1.index('Z')
                         if err_i in [1,3,5]:  
@@ -193,7 +180,6 @@ class Measure_2_logicals(Quantum_Operation):
 
                     return first_M, corr_type
 
-                
                 else:
                     third_M = self.run_one_circ(4).values()[0][0]
                     return third_M, 'normal'
@@ -220,43 +206,40 @@ class Measure_2_logicals(Quantum_Operation):
         The assumption is that there are 6 circuits.
         '''
        
+        code = 'Steane'
+        QEC_func = self.run_one_diVincenzo
+        if stab_kind == 'X':    
+            tricky_indices = [1,3,5]
+            Pauli_error = 'Z'
+        elif stab_kind == 'Z':    
+            tricky_indices = [0,3,4]
+            Pauli_error = 'X'
+        
+        # default values
+        corr_nonanc = 'normal'
+        corr_anc = False
+
         #brow.from_circuit(self.circuits[0])
         #n_subcircs = len(self.circuits)
         #print n_subcircs
         #sys.exit(0)
 
-        # (1) Measure one time stabilizers to define them
-        # (only used for Mxx if we start with anc in product state of |0>)
-        
         # list of outcomes of the low-weight and high-weight operators
         low_w, high_w = [], []
 
         first_subcirc_i = 0
 
+        # (1) Measure one time stabilizers to define them
+        # (only used for Mxx if we start with anc in product state of |0>)
         if len(self.circuits) > 12:
-            
+            data_errors0 = QEC_func(0, code, stab_kind)
+        
             data_qs = self.circuits[0].data_qubits()
             data_q_ids = [q.qubit_id for q in data_qs]
             pre_ns = min(data_q_ids)
             pre_Is = ['I' for i in range(pre_ns)]
             post_ns = len(self.stabs) - max(data_q_ids) - 1
             post_Is = ['I' for i in range(post_ns)]
-        
-            output_dict = self.run_one_circ(0)
-            n_first_anc = min(output_dict.keys())
-
-            data_errors0, hook_errors = qfun.stabs_QEC_diVin(output_dict,
-                                                             n_first_anc,
-                                                             'Steane',
-                                                             stab_kind)
-
-            if hook_errors.count('I') != len(hook_errors):
-                hook_errors = pre_Is + hook_errors + post_Is
-                corr_state = qfun.update_stabs(self.stabs,
-                                               self.destabs,
-                                               hook_errors)
-       
-                self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
             
             if data_errors0.count('I') != len(data_errors0):
                 data_errors0 = pre_Is + data_errors0 + post_Is
@@ -265,7 +248,6 @@ class Measure_2_logicals(Quantum_Operation):
                                                data_errors0)
        
                 self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
-
 
             first_subcirc_i = 1
 
@@ -279,59 +261,12 @@ class Measure_2_logicals(Quantum_Operation):
         print 'high_w1 =', high_w[0]
         
         # (4) Measure stabilizers for non-anc first time
-        data_qs = self.circuits[first_subcirc_i+2].data_qubits()
-        data_q_ids = [q.qubit_id for q in data_qs]
-        pre_ns = min(data_q_ids)
-        pre_Is = ['I' for i in range(pre_ns)]
-        post_ns = len(self.stabs) - max(data_q_ids) - 1
-        post_Is = ['I' for i in range(post_ns)]
-        
-        output_dict = self.run_one_circ(first_subcirc_i+2)
-        n_first_anc = min(output_dict.keys())
-
-        data_errors_nonanc1, hook_errors = qfun.stabs_QEC_diVin(output_dict,
-                                                                n_first_anc,
-                                                                'Steane',
-                                                                stab_kind)
-
-        if hook_errors.count('I') != len(hook_errors):
-            hook_errors = pre_Is + hook_errors + post_Is
-            corr_state = qfun.update_stabs(self.stabs,
-                                           self.destabs,
-                                           hook_errors)
-       
-            self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
-
-
+        data_error_nonanc1 = QEC_func(first_subcirc_i+2, code, stab_kind)
         print 'data errors non anc 1 =', data_errors_nonanc1
 
         # (5) Measure stabilizers for anc first time
-        data_qs = self.circuits[first_subcirc_i+3].data_qubits()
-        data_q_ids = [q.qubit_id for q in data_qs]
-        pre_ns = min(data_q_ids)
-        pre_Is = ['I' for i in range(pre_ns)]
-        post_ns = len(self.stabs) - max(data_q_ids) - 1
-        post_Is = ['I' for i in range(post_ns)]
-        
-        output_dict = self.run_one_circ(first_subcirc_i+3)
-        n_first_anc = min(output_dict.keys())
-
-        data_errors_anc1, hook_errors = qfun.stabs_QEC_diVin(output_dict,
-                                                             n_first_anc,
-                                                             'Steane',
-                                                             stab_kind)
-
-        if hook_errors.count('I') != len(hook_errors):
-            hook_errors = pre_Is + hook_errors + post_Is
-            corr_state = qfun.update_stabs(self.stabs,
-                                           self.destabs,
-                                           hook_errors)
-       
-            self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
-
-
+        data_error_anc1 = QEC_func(first_subcirc_i+3, code, stab_kind)
         print 'data errors anc 1 =', data_errors_anc1
-
 
         # (6) Measure low-weight operator second time
         low_w += [self.run_one_circ(first_subcirc_i+4).values()[0][0]]
@@ -341,110 +276,51 @@ class Measure_2_logicals(Quantum_Operation):
         high_w += [self.run_one_circ(first_subcirc_i+5).values()[0][0]]
         print 'high_w2 =', high_w[1]
 
-        #################################################
-
-
-
-        # if no errors on non-ancillary qubit
-        if data_errors_nonanc1.count('I') == 7:
-            
-            # if no errors on ancillary qubit
-            if data_errors_anc1.count('I') == 7:
-
-                if low_w[0] != low_w[1]:
-                    low_w += [self.run_one_circ(first_subcirc_i+8).values()[0][0]]
-                    print 'low_w3 =', low_w[2]
-                if high_w[0] != high_w[1]:
-                    high_w += [self.run_one_circ(first_subcirc_i+9).values()[0][0]]
-                    print 'high_w3 =', high_w[2]
-
-                parity = (low_w[-1] + high_w[-1])%2
-                
-                return parity, (len(low_w), len(high_w)), 'normal', False
-          
-            # if errors on ancillary qubit
-            else:
-                
-                # run QEC(anc) again
-                data_qs = self.circuits[first_subcirc_i+7].data_qubits()
-                data_q_ids = [q.qubit_id for q in data_qs]
-                pre_ns = min(data_q_ids)
-                pre_Is = ['I' for i in range(pre_ns)]
-                post_ns = len(self.stabs) - max(data_q_ids) - 1
-                post_Is = ['I' for i in range(post_ns)]
         
-                output_dict = self.run_one_circ(first_subcirc_i+7)
-                n_first_anc = min(output_dict.keys())
-
-                data_errors_anc2, hook_errors = qfun.stabs_QEC_diVin(output_dict,
-                                                                     n_first_anc,
-                                                                     'Steane',
-                                                                     stab_kind)
-
-                if hook_errors.count('I') != len(hook_errors):
-                    hook_errors = pre_Is + hook_errors + post_Is
-                    corr_state = qfun.update_stabs(self.stabs,
-                                                   self.destabs,
-                                                   hook_errors)
-       
-                    self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
-
-
-                print 'data errors anc 2 =', data_errors_anc2
-
-                # if QEC(anc)(1) is equal to QEC(anc)(2)
-                if data_errors_anc1 == data_errors_anc2:
-                    
-                    # if the operators are the same
-                    if (low_w[0]==low_w[1] and high_w[0]==high_w[1]):
-                        
-                        if stab_kind == 'X':
-                            err_i = data_errors_anc1.index('Z')
-                            if err_i in [1,3,5]:  
-                                corr_anc = True
-                            else:  
-                                corr_anc = False
-
-                        elif stab_kind == 'Z':
-                            err_i = data_errors_anc1.index('X')
-                            if err_i in [0,3,4]:
-                                corr_anc = True
-                            else:
-                                corr_anc = False
-
-                    if low_w[0] != low_w[1]:
-                        low_w += [self.run_one_circ(first_subcirc_i+8).values()[0][0]]
-                        print 'low_w3 =', low_w[2]
-                    if high_w[0] != high_w[1]:
-                        high_w += [self.run_one_circ(first_subcirc_i+9).values()[0][0]]
-                        print 'high_w3 =', high_w[2]
-
-                    parity = (low_w[-1] + high_w[-1])%2
-                
-                    return parity, (len(low_w), len(high_w)), 'normal', corr_anc
-                        
-
-                # if QEC(anc)(1) is different from QEC(anc)(2)
-                else:
-                    
-                    if low_w[0] != low_w[1]:
-                        low_w += [self.run_one_circ(first_subcirc_i+8).values()[0][0]]
-                        print 'low_w3 =', low_w[2]
-                    if high_w[0] != high_w[1]:
-                        high_w += [self.run_one_circ(first_subcirc_i+9).values()[0][0]]
-                        print 'high_w3 =', high_w[2]
-
-                    parity = (low_w[-1] + high_w[-1])%2
-                
-                    return parity, (len(low_w), len(high_w)), 'normal', False
-
-
-        # if errors on non-ancillary qubit
-        else:
-            pass
+        # if error on non-ancillary qubit
+        if data_errors_nonanc1.count('I') != 7:
             
+            # run QEC(non-anc) again
+            data_errors_nonanc2 = QEC_func(first_subcirc_i+6, code, stab_kind)
+            print 'data errors nonanc 2 =', data_errors_nonanc2
+
+            # if QEC(non-anc)(1) is equal to QEC(non-anc)(2)
+            if data_errors_nonanc1 == data_errors_nonanc2:
+
+                # if the operators are the same, then the error happened before
+                if (low_w[0]==low_w[1] and high_w[0]==high_w[1]):
+                    err_i = data_errors_nonanc1.index(Pauli_error)
+                    # if the faulty qubit is on the boundary 
+                    if err_i in tricky_indices:  corr_nonanc = 'alternative'
 
 
+        # if error on ancillary qubit
+        if data_errors_anc1.count('I') != 7:
+                
+            # run QEC(anc) again
+            data_errors_anc2 = QEC_func(first_subcirc_i+7, code, stab_kind)
+            print 'data errors anc 2 =', data_errors_anc2
+
+            # if QEC(anc)(1) is equal to QEC(anc)(2)
+            if data_errors_anc1 == data_errors_anc2:
+                    
+                # if the operators are the same, then the error happened before
+                if (low_w[0]==low_w[1] and high_w[0]==high_w[1]):
+                    err_i = data_errors_anc1.index(Pauli_error)
+                    # if the faulty qubit is on the boundary 
+                    if err_i in tricky_indices:  corr_anc = True
+
+        if low_w[0] != low_w[1]:
+            low_w += [self.run_one_circ(first_subcirc_i+8).values()[0][0]]
+            print 'low_w3 =', low_w[2]
+        if high_w[0] != high_w[1]:
+            high_w += [self.run_one_circ(first_subcirc_i+9).values()[0][0]]
+            print 'high_w3 =', high_w[2]
+
+        # for the parity, select the last outcome of each operator
+        parity = (low_w[-1] + high_w[-1])%2
+        return parity, (len(low_w), len(high_w)), corr_nonanc, corr_anc
+          
 
 
 class QEC_d3(Quantum_Operation):
@@ -488,42 +364,6 @@ class QEC_d3(Quantum_Operation):
        
             data_errors = Z_errors, X_errors
 
-
-        return data_errors
-
-
-
-    def run_one_diVincenzo(self, circuit, code, stab_kind=None):
-        '''
-        runs one round of X or Z stabilizers (for a CSS code)
-        or the whole set of stabilizers (for a non-CSS code)
-        assuming the ancillae are in an unverified cat state.
-        circuit refers to the index of the circuit to be run.
-        Based on "code", we then correct the hook errors and
-        return the data errors.
-        '''
-
-        data_qs = self.circuits[circuit].data_qubits()
-        data_q_ids = [q.qubit_id for q in data_qs]
-        pre_ns = min(data_q_ids)
-        pre_Is = ['I' for i in range(pre_ns)]
-        post_ns = len(self.stabs) - max(data_q_ids) - 1
-        post_Is = ['I' for i in range(post_ns)]
-        
-        output_dict = self.run_one_circ(circuit)
-        n_first_anc = min(output_dict.keys())
-        data_errors, hook_errors = qfun.stabs_QEC_diVin(output_dict,
-                                                        n_first_anc,
-                                                        code,
-                                                        stab_kind)
-
-        if hook_errors.count('I') != len(hook_errors):
-            hook_errors = pre_Is + hook_errors + post_Is
-            corr_state = qfun.update_stabs(self.stabs,
-                                           self.destabs,
-                                           hook_errors)
-       
-            self.stabs, self.destabs = corr_state[0][:], corr_state[1][:]
 
         return data_errors
 
