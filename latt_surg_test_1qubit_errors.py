@@ -21,17 +21,17 @@ CNOT_circuits = qfun.create_latt_surg_CNOT(Is_after2q)
 #faulty_qubit = faulty_gate.qubits[1]
 #new_g = circuits[0].insert_gate(faulty_gate, [faulty_qubit], '', 'Y', False)
 #new_g.is_error = True
-brow.from_circuit(CNOT_circuits, True)
+#brow.from_circuit(CNOT_circuits, True)
 #i = 0
 #for supra_gate in circuits.gates:
 #    i += 1
 #    print 'gate', i
 #    print supra_gate.gate_name
-sys.exit(0)
+#sys.exit(0)
 
 # create the initial state (|+> ctrl; |0> targ; all |0> anc)
-init_state_ctrl = wrapper.prepare_stabs_Steane('+Z')
-init_state_targ = wrapper.prepare_stabs_Steane('+Z')
+init_state_ctrl = wrapper.prepare_stabs_Steane('+X')
+init_state_targ = wrapper.prepare_stabs_Steane('+X')
 init_state_anc = wrapper.prepare_stabs_Steane('+Z')
 #anc_stabs, anc_destabs = [], []
 #for i in range(n_code):
@@ -97,18 +97,18 @@ for supra_gate in CNOT_circuits.gates:
             print 'Inside index =', in_i
             
             #for Pauli_error in ['Z']:
-            for Pauli_error in ['X', 'Y', 'Z']:
+            for P_error in ['Z']:
                 clean_circuits = qfun.create_latt_surg_CNOT(Is_after2q)
                 clean_faulty_g = clean_circuits.gates[supra_i].circuit_list[0].gates[in_i]
                 clean_faulty_q = clean_faulty_g.qubits[0]
-                print 'Error =', Pauli_error, clean_faulty_q.qubit_id
+                print 'Error =', P_error, clean_faulty_q.qubit_id
 
                 #if clean_faulty_q.qubit_id in range(7,14):
                 if True:    
                     error_g = clean_circuits.gates[supra_i].circuit_list[0].insert_gate(clean_faulty_g,
                                                                                     [clean_faulty_q],
                                                                                     '',
-                                                                                    Pauli_error,
+                                                                                    P_error,
                                                                                     False)
                     error_g.is_error = True
 
@@ -120,7 +120,15 @@ for supra_gate in CNOT_circuits.gates:
                     print 'FAIL'
                     print supra_i
                     print in_i
+                    print P_error
                     sys.exit(0)
+
+                #if supra_i == 0 and in_i == 9:
+                #    print supra_i
+                #    print in_i
+                #    print P_error
+                    
+                    #sys.exit(0)
 
                 #sys.exit(0)
 
