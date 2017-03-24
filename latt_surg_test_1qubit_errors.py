@@ -32,16 +32,16 @@ CNOT_circuits = qfun.create_latt_surg_CNOT(Is_after2q)
 # create the initial state (|+> ctrl; |0> targ; all |0> anc)
 init_state_ctrl = wrapper.prepare_stabs_Steane('+X')
 init_state_targ = wrapper.prepare_stabs_Steane('+X')
-init_state_anc = wrapper.prepare_stabs_Steane('+Z')
-#anc_stabs, anc_destabs = [], []
-#for i in range(n_code):
-#    anc_stab = ['Z' if i==j else 'I' for j in range(n_code)]
-#    anc_stab.insert(0, '+')
-#    anc_destab = ['X' if i==j else 'I' for j in range(n_code)]
-#    anc_destab.insert(0, '+')
-#    anc_stabs += [''.join(anc_stab)]
-#    anc_destabs += [''.join(anc_destab)]
-#init_state_anc = anc_stabs, anc_destabs
+#init_state_anc = wrapper.prepare_stabs_Steane('+Z')
+anc_stabs, anc_destabs = [], []
+for i in range(n_code):
+    anc_stab = ['Z' if i==j else 'I' for j in range(n_code)]
+    anc_stab.insert(0, '+')
+    anc_destab = ['X' if i==j else 'I' for j in range(n_code)]
+    anc_destab.insert(0, '+')
+    anc_stabs += [''.join(anc_stab)]
+    anc_destabs += [''.join(anc_destab)]
+init_state_anc = anc_stabs, anc_destabs
 
 all_stabs = [init_state_ctrl[0]]+[init_state_targ[0]]+[init_state_anc[0]]
 all_destabs = [init_state_ctrl[1]]+[init_state_targ[1]]+[init_state_anc[1]]
@@ -97,7 +97,7 @@ for supra_gate in CNOT_circuits.gates:
             print 'Inside index =', in_i
             
             #for Pauli_error in ['Z']:
-            for P_error in ['Z']:
+            for P_error in ['X', 'Y', 'Z']:
                 clean_circuits = qfun.create_latt_surg_CNOT(Is_after2q)
                 clean_faulty_g = clean_circuits.gates[supra_i].circuit_list[0].gates[in_i]
                 clean_faulty_q = clean_faulty_g.qubits[0]

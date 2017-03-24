@@ -386,17 +386,17 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
             local_circ = c.Circuit()
             local_circ.add_gate_at([n_code*3], 'PrepareXPlus')
             
-            #local_circ.add_gate_at([n_code*3], 'I')
+            local_circ.add_gate_at([n_code*3], 'I')
             
             first_targ = n_code*qubit_pairs[0][0] + qubit_pairs[0][1]
             sec_targ = n_code*qubit_pairs[1][0] + qubit_pairs[1][1]
             
             local_circ.add_gate_at([n_code*3, first_targ], ent_gate)
-            #local_circ.add_gate_at([n_code*3], 'I')
+            local_circ.add_gate_at([n_code*3], 'I')
             local_circ.add_gate_at([first_targ], 'I')
             
             local_circ.add_gate_at([n_code*3, sec_targ], ent_gate)
-            #local_circ.add_gate_at([n_code*3], 'I')
+            local_circ.add_gate_at([n_code*3], 'I')
             local_circ.add_gate_at([sec_targ], 'I')
             
             
@@ -404,11 +404,11 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
                 third_targ = n_code*qubit_pairs[2][0] + qubit_pairs[2][1]
                 fourth_targ = n_code*qubit_pairs[3][0] + qubit_pairs[3][1]
                 local_circ.add_gate_at([n_code*3, third_targ], ent_gate)
-                #local_circ.add_gate_at([n_code*3], 'I')
+                local_circ.add_gate_at([n_code*3], 'I')
                 local_circ.add_gate_at([third_targ], 'I')
             
                 local_circ.add_gate_at([n_code*3, fourth_targ], ent_gate)
-                #local_circ.add_gate_at([n_code*3], 'I')
+                local_circ.add_gate_at([n_code*3], 'I')
                 local_circ.add_gate_at([fourth_targ], 'I')
             
 
@@ -459,8 +459,9 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
                 measure_circ.join_circuit_at(range(n_code), EC_circ)
             elif logicals == 'X':
                 measure_circ.join_circuit_at(range(n_code,2*n_code), EC_circ)
-                # add QEC on ancillary logical qubit
-                measure_circ.join_circuit_at(range(2*n_code,3*n_code), EC_circ_anc)
+            
+            # add QEC on ancillary logical qubit
+            measure_circ.join_circuit_at(range(2*n_code,3*n_code), EC_circ_anc)
             
 
             ####################### TEMPORARY
@@ -468,7 +469,7 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
             #measure_circ.join_circuit_at(range(2*n_code,3*n_code), EC_circ_anc)
 
 
-    full_gatename = 'Measure2logicals' + logicals + extra_name
+    full_gatename = 'Measure2logicals' + extra_name + logicals
     measure_circ = c.Encoded_Gate(full_gatename, [measure_circ]).circuit_wrap()
 
     return measure_circ
@@ -586,18 +587,23 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
     jointQEC_circ = create_joint_EC(Is_after2q, 'Z', non_anc_qubit='targ')
     CNOT_circ.join_circuit_at(range(n_code, 3*n_code), jointQEC_circ)
     
-
-    I_circuit = create_I_circuit(n_code)
-    CNOT_circ.join_circuit_at(range(2*n_code,3*n_code), I_circuit)
+    I_circuit = create_I_circuit(3*n_code)
+    CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
     
     # (3) Measure ZZ between control and ancilla 
     #ZZ_qubits = [[[0,0], [0,4]], [[0,3], [2,3]]]
-    ZZ_qubits = [[[0,0], [0,3], [0,4], [2,0], [2,3], [2,4]]]
+    ZZ_qubits = [[[0,0], [2,0], [0,4], [2,4]], [[0,3], [2,3]]]
+    #ZZ_qubits = [[[0,0], [0,3], [0,4], [2,0], [2,3], [2,4]]]
     measureZZ_circ = create_measure_2_logicals(Is_after2q, ZZ_qubits, 'Z')
     CNOT_circ.join_circuit(measureZZ_circ, anc_parallel)
 
     I_circuit = create_I_circuit(3*n_code)
     CNOT_circ.join_circuit(I_circuit)
+    
+    # (4) Perform joint QEC on control and ancilla 
+    # (only if ZZ and ZZZZ were measured) 
+    jointQEC_circ = create_joint_EC(Is_after2q, 'X', non_anc_qubit='ctrl')
+    CNOT_circ.join_circuit_at(range(n_code)+range(2*n_code,3*n_code), jointQEC_circ)
     
     # (4) Do QEC on ancillary logical qubit
     #QEC_anc = create_EC_subcircs(code, Is_after2q, False)
