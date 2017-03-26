@@ -332,18 +332,18 @@ def create_EC_subcircs(code, Is_after2q, initial_I=True,
 
 def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
                               meas_errors=True, FT_meas=True,
-                              QEC_before=False):
+                              QEC_before=False, redun=3):
     '''
     QEC_before: adds a single QEC step on the ancillary logical
     qubit just to ensure that the X stabilizers are defined
     (in case we start with a product state of |0>).
     '''
 
-    redun = 3
     n_code = 7
     ent_gate = 'C' + logicals
     enc_gate_name = 'Partial_measurement'
     ancilla_parallel = True
+    initial_I = False
 
     if len(qubits) == 1:  extra_name = ''
     elif len(qubits) == 2:  extra_name = 'long'
@@ -366,7 +366,7 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
                                                  False,
                                                  ancilla_parallel,
                                                  True,
-                                                 True,
+                                                 initial_I,
                                                  False,
                                                  'Steane',
                                                  meas_errors,
@@ -374,7 +374,6 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
 
         # add QEC on ancillary logical qubit
         measure_circ.join_circuit_at(range(2*n_code,3*n_code), EC_circ)
-
 
     for i in range(redun):
         for qubit_pairs in qubits:
@@ -386,30 +385,30 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
             local_circ = c.Circuit()
             local_circ.add_gate_at([n_code*3], 'PrepareXPlus')
             
-            local_circ.add_gate_at([n_code*3], 'I')
+            #local_circ.add_gate_at([n_code*3], 'I')
             
             first_targ = n_code*qubit_pairs[0][0] + qubit_pairs[0][1]
             sec_targ = n_code*qubit_pairs[1][0] + qubit_pairs[1][1]
             
             local_circ.add_gate_at([n_code*3, first_targ], ent_gate)
-            local_circ.add_gate_at([n_code*3], 'I')
-            local_circ.add_gate_at([first_targ], 'I')
+            #local_circ.add_gate_at([n_code*3], 'I')
+            #local_circ.add_gate_at([first_targ], 'I')
             
             local_circ.add_gate_at([n_code*3, sec_targ], ent_gate)
-            local_circ.add_gate_at([n_code*3], 'I')
-            local_circ.add_gate_at([sec_targ], 'I')
+            #local_circ.add_gate_at([n_code*3], 'I')
+            #local_circ.add_gate_at([sec_targ], 'I')
             
             
             if len(qubit_pairs) >= 4:
                 third_targ = n_code*qubit_pairs[2][0] + qubit_pairs[2][1]
                 fourth_targ = n_code*qubit_pairs[3][0] + qubit_pairs[3][1]
                 local_circ.add_gate_at([n_code*3, third_targ], ent_gate)
-                local_circ.add_gate_at([n_code*3], 'I')
-                local_circ.add_gate_at([third_targ], 'I')
+                #local_circ.add_gate_at([n_code*3], 'I')
+                #local_circ.add_gate_at([third_targ], 'I')
             
                 local_circ.add_gate_at([n_code*3, fourth_targ], ent_gate)
-                local_circ.add_gate_at([n_code*3], 'I')
-                local_circ.add_gate_at([fourth_targ], 'I')
+                #local_circ.add_gate_at([n_code*3], 'I')
+                #local_circ.add_gate_at([fourth_targ], 'I')
             
 
             if len(qubit_pairs) == 6:
@@ -417,15 +416,15 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
                 sixth_targ = n_code*qubit_pairs[5][0] + qubit_pairs[5][1]
                 local_circ.add_gate_at([n_code*3, fifth_targ], ent_gate)
                 #local_circ.add_gate_at([n_code*3], 'I')
-                local_circ.add_gate_at([fifth_targ], 'I')
+                #local_circ.add_gate_at([fifth_targ], 'I')
                 
                 local_circ.add_gate_at([n_code*3, sixth_targ], ent_gate)
                 #local_circ.add_gate_at([n_code*3], 'I')
-                local_circ.add_gate_at([sixth_targ], 'I')
+                #local_circ.add_gate_at([sixth_targ], 'I')
                 
             if meas_errors:
                 local_circ.add_gate_at([n_code*3], 'ImX')
-                local_circ.add_gate_at([n_code*3], 'I')
+                #local_circ.add_gate_at([n_code*3], 'I')
             local_circ.add_gate_at([n_code*3], 'MeasureX')
 
             #for q_index in range(3*n_code):
@@ -446,7 +445,7 @@ def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
                                                      False,
                                                      ancilla_parallel,
                                                      True,
-                                                     True,
+                                                     initial_I,
                                                      False,
                                                      'Steane',
                                                      meas_errors,
@@ -485,6 +484,7 @@ def create_joint_EC(Is_after2q, logicals, non_anc_qubit='targ'):
     n_code = 7
     ancilla_parallel = True
     meas_errors = True
+    initial_I = False
 
     if logicals == 'Z':
         QEC_stabs = steane.Code.stabilizer[3:6]
@@ -505,7 +505,7 @@ def create_joint_EC(Is_after2q, logicals, non_anc_qubit='targ'):
                                              False,
                                              ancilla_parallel,
                                              True,
-                                             True,
+                                             initial_I,
                                              False,
                                              'Steane',
                                              meas_errors,
@@ -542,7 +542,7 @@ def create_I_circuit(n_qubits):
 
 
 def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
-                          EC_ctrl_targ=False):
+                          EC_ctrl_targ=False, FT=True):
     '''
     creates the whole supra-circuit for the lattice-surgery CNOT
     exclusive for the Steane code (distance-3 color code)
@@ -563,9 +563,28 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
     #CNOT_circ.add_gate_at([2*n_code+5, 2*n_code+3], 'CX')
     #CNOT_circ = c.Encoded_Gate('Preparation', [CNOT_circ]).circuit_wrap()
 
-    I_circuit = create_I_circuit(3*n_code)
-    #I_circuit = create_I_circuit(n_code)
-    CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
+    if initial_I:
+        I_circuit = create_I_circuit(3*n_code)
+        #I_circuit = create_I_circuit(n_code)
+        CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
+
+
+    if FT == False:
+        XX_qubits = [[[1,1], [1,3], [1,5], [2,1], [2,3], [2,5]]]
+        measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X', True, False, True, 1)
+        in_range = [8,10,12] + range(14,21)
+        CNOT_circ.join_circuit_at(in_range, measureXX_circ)
+    
+        ZZ_qubits = [[[0,0], [0,3], [0,4], [2,0], [2,3], [2,4]]]
+        measureZZ_circ = create_measure_2_logicals(Is_after2q, ZZ_qubits, 'Z', True, False, False, 1)
+        in_range = [0,3,4,14,17,18]
+        CNOT_circ.join_circuit_at(in_range, measureZZ_circ)
+    
+        meas_circ = steane.Generator.create_encoded_circuit('MeasureXDestroy')
+        meas_circ = c.Encoded_Gate('MeasureX', [meas_circ]).circuit_wrap()
+        CNOT_circ.join_circuit_at(range(2*n_code, 3*n_code), meas_circ)
+
+        return CNOT_circ
 
     # (2) Measure XX between target and ancilla
     #XX_qubits = [[[1,1], [2,1]], [[1,3], [1,5]]]
@@ -575,8 +594,8 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
     measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X', True, True, True)
     CNOT_circ.join_circuit_at(range(n_code, 3*n_code), measureXX_circ)
 
-    I_circuit = create_I_circuit(3*n_code)
-    CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
+    #I_circuit = create_I_circuit(3*n_code)
+    #CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
     
     # (2.1) Do QEC on ancillary logical qubit
     #QEC_anc = create_EC_subcircs(code, Is_after2q, False)
@@ -587,8 +606,8 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
     jointQEC_circ = create_joint_EC(Is_after2q, 'Z', non_anc_qubit='targ')
     CNOT_circ.join_circuit_at(range(n_code, 3*n_code), jointQEC_circ)
     
-    I_circuit = create_I_circuit(3*n_code)
-    CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
+    #I_circuit = create_I_circuit(3*n_code)
+    #CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
     
     # (3) Measure ZZ between control and ancilla 
     #ZZ_qubits = [[[0,0], [0,4]], [[0,3], [2,3]]]
@@ -597,8 +616,8 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
     measureZZ_circ = create_measure_2_logicals(Is_after2q, ZZ_qubits, 'Z')
     CNOT_circ.join_circuit(measureZZ_circ, anc_parallel)
 
-    I_circuit = create_I_circuit(3*n_code)
-    CNOT_circ.join_circuit(I_circuit)
+    #I_circuit = create_I_circuit(3*n_code)
+    #CNOT_circ.join_circuit(I_circuit)
     
     # (4) Perform joint QEC on control and ancilla 
     # (only if ZZ and ZZZZ were measured) 
