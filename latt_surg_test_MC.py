@@ -35,7 +35,8 @@ error_info = mc.read_error_info(error_dict)
 #wrapper.gates_list(CNOT_circuits, error_dict.keys())
 
 n_per_proc, n_proc = int(sys.argv[4]), int(sys.argv[5])
-FT = bool(sys.argv[6])
+if sys.argv[6] == 'True':  FT = True
+else:                      FT = False
 
 # create the initial state (|+> ctrl; |0> targ; all |0> anc)
 init_state_ctrl = wrapper.prepare_stabs_Steane('+X')

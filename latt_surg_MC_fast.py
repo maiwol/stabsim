@@ -1,4 +1,6 @@
 import sys
+import os
+import json
 import error
 import random as rd
 import multiprocessing as mp
@@ -22,21 +24,20 @@ n_code = 7
 bare = False
 chp_loc = './chp_extended'
 
-
 # Define error dictionary and whether or not to add Is after 2-qubit gates
 # The 'standard' error model does not require Is after 2-qubit gates.
 # The 'ion_trap_simple' error model does.
 error_model = 'standard'
-p1, p2, p_meas = float(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3])
+p1, p2, p_meas = 0.001, 0.001, 0.001  # these don't matter for the fast sampler
 error_dict, Is_after2q, Is_after_1q = wrapper.dict_for_error_model(error_model, p1, p2, p_meas)
 error_info = mc.read_error_info(error_dict)
+output_folder = './MC_results/latt_CNOT/' + error_model + '/'
 
-#brow.from_circuit(CNOT_circuits, True)
-#sys.exit(0)
-#wrapper.gates_list(CNOT_circuits, error_dict.keys())
+n_per_proc, n_proc = int(sys.argv[1]), int(sys.argv[2])
+if sys.argv[3] == 'True':  FT = True
+else:  FT = False
 
-n_per_proc, n_proc = int(sys.argv[4]), int(sys.argv[5])
-FT = bool(sys.argv[6])
+n_errors = [int(sys.argv[4]), int(sys.argv[5])]
 
 # create the initial state (|+> ctrl; |0> targ; all |0> anc)
 init_state_ctrl = wrapper.prepare_stabs_Steane('+X')
@@ -92,7 +93,7 @@ def run_latt_surg_circ(init_state, circuits):
 
 
 
-def gates_list_CNOT(circs, faulty_gates_names):
+def gates_list_CNOT(CNOT_circuits, faulty_gates_names):
     '''
     improvised function to calculate the indices for 1-qubit and 2-qubit gates
     '''
@@ -136,7 +137,7 @@ def gates_list_CNOT(circs, faulty_gates_names):
     return single_qubit_gates, two_qubit_gates
 
 
-n_errors = [1,3]
+
 
 CNOT_circuits = qfun.create_latt_surg_CNOT(Is_after2q, initial_I, anc_parallel,
                                            EC_ctrl_targ, FT)
@@ -167,13 +168,12 @@ def run_several_latt_fast(error_info, n_runs_total, init_state):
             for group in gate_groups:
                 for g in group:
                     if g[:-1] == gate[:-1]:
-                        group += [gate]
+                        group.insert(0, gate)
                         in_group = True
-                        continue
+                        break
             if not in_group:
                 gate_groups += [[gate]]
-    
-
+        
         # insert errors
         for group in gate_groups:
             local_gates = [g[-1] for g in group]
@@ -185,6 +185,7 @@ def run_several_latt_fast(error_info, n_runs_total, init_state):
                 faulty_circ = faulty_circ.gates[group[0][2]].circuit_list[0]
 
             error.add_error_alternative(faulty_circ, error_info, 'Muyalon', local_gates)
+        
 
         # run the faulty circuit
         init_state_copy = init_state[0][:], init_state[1][:]
@@ -192,15 +193,11 @@ def run_several_latt_fast(error_info, n_runs_total, init_state):
         if fail:  n_fails += 1
 
 
-        print 'Run', n_run
-        print gate_groups
-        print 'Fail', fail
+        #print 'Fail', fail
 
     return n_fails
         
 
-print run_several_latt_fast(error_info, 10, initial_state)
-sys.exit(0)
 
 def run_several_latt(error_info, n_runs_total, init_state):
     '''
@@ -255,6 +252,22 @@ def run_parallel_latt(error_info, n_runs_per_proc, n_proc, init_state, sampling=
     return dicts
 
 
-print run_parallel_latt(error_info, n_per_proc, n_proc, initial_state)
+out_list = run_parallel_latt(error_info, n_per_proc, n_proc, initial_state)
+n_total = n_per_proc*n_proc
+n_fail = sum(out_list)
+p_fail = float(n_fail)/float(n_total)
+out_dict = {'n_total': n_total, 'n_fail': n_fail, 'p_fail': p_fail}
+for i in range(n_proc):
+    out_dict[i] = out_list[i]
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
 
+if FT:
+    json_filename = 'FT_' + str(n_errors[0]) + '_' + str(n_errors[1]) + '.json'
+else:
+    json_filename = 'nonFT_' + str(n_errors[0]) + '_' + str(n_errors[1]) + '.json'
+abs_filename = output_folder + json_filename
+json_file = open(abs_filename, 'w')
+json.dump(out_dict, json_file, indent=4, separators=(',', ':'), sort_keys=True)
+json_file.close()
     

@@ -2498,6 +2498,11 @@ def gates_list(circs, faulty_gates_names):
     two_qubit_gates = []
     gl = faulty_gates_names[:]
 
+    #for i in range(len(circs)):
+        #gate = circs.gates[i]
+        #for j in range(len(gate.circuit_list[0].gates):
+    #return
+
     for i in range(len(circs)):
         gates = circs[i].gates
         for j in range(len(gates)):
@@ -2595,7 +2600,6 @@ def gates_list_for_operation(operation, faulty_gates_names,
     Builds the circuit from operation and returns 
     a list of 1-qubit and 2-qubit gates 
     '''
-        
     subcircs = create_EC_subcircs(operation, Is_after2q,
                                   initial_I, initial_trans)
     gate_indices = gates_list(subcircs, faulty_gates_names)
@@ -2847,3 +2851,48 @@ def add_errors_fast_sampler_surface(gate_indices, n_errors, circ, error_info):
     errors_dict = circ_dict
 
     return errors_dict, carry_run
+
+
+
+def gates_list_CNOT(CNOT_circuits, faulty_gates_names):
+    '''
+    improvised function to calculate the indices for 1-qubit and 2-qubit gates
+    '''
+
+    single_qubit_gates, two_qubit_gates = [], []
+
+    for i in range(len(CNOT_circuits.gates)):
+        supra_gate = CNOT_circuits.gates[i] 
+        if supra_gate.gate_name == 'Logical_I' or supra_gate.gate_name == 'MeasureX':
+            for j in range(len(supra_gate.circuit_list[0].gates)):
+                in_gate1 = supra_gate.circuit_list[0].gates[j]
+                if in_gate1.gate_name in faulty_gates_names:
+                    if len(in_gate1.qubits) == 1:
+                        single_qubit_gates.append((i,j))
+                    elif len(in_gate1.qubits) == 2:
+                        two_qubit_gates.append((i,j))
+        
+        elif supra_gate.gate_name[:8] == 'Measure2' or supra_gate.gate_name[:5] == 'Joint':
+            for j in range(len(supra_gate.circuit_list[0].gates)):
+                in_gate1 = supra_gate.circuit_list[0].gates[j]
+                if in_gate1.gate_name[:7] == 'Partial':
+                    for k in range(len(in_gate1.circuit_list[0].gates)):
+                        in_gate2 = in_gate1.circuit_list[0].gates[k]
+                        if in_gate2.gate_name in faulty_gates_names:
+                            if len(in_gate2.qubits) == 1:
+                                single_qubit_gates.append((i,j,k))
+                            elif len(in_gate2.qubits) == 2:
+                                two_qubit_gates.append((i,j,k))
+                            
+                elif in_gate1.gate_name[:2] == 'EC':
+                    for k in range(len(in_gate1.circuit_list[0].gates)):
+                        in_gate2 = in_gate1.circuit_list[0].gates[k]
+                        for l in range(len(in_gate2.circuit_list[0].gates)):
+                            in_gate3 = in_gate2.circuit_list[0].gates[l]
+                            if in_gate3.gate_name in faulty_gates_names:
+                                if len(in_gate3.qubits) == 1:
+                                    single_qubit_gates.append((i,j,k,l))
+                                elif len(in_gate3.qubits) == 2:
+                                    two_qubit_gates.append((i,j,k,l))
+                                
+    return single_qubit_gates, two_qubit_gates
