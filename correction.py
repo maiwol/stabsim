@@ -590,7 +590,7 @@ class Cat_Correct:
                                                                  Is_after_two,
                                                                  rep_verif_w8,
                                                                  rep+1)
-            total_circ.join_circuit(stab_circ_X)
+            total_circ.join_circuit(stab_circ_X, False)
            
             # after first round we set initial_I to False
             initial_I = False
@@ -600,7 +600,7 @@ class Cat_Correct:
                                                                  Is_after_two,
                                                                  rep_verif_w8,
                                                                  rep+1)
-            total_circ.join_circuit(stab_circ_Z)
+            total_circ.join_circuit(stab_circ_Z, False)
 
         total_circ = Encoded_Gate('QEC_d5', [total_circ]).circuit_wrap()
 

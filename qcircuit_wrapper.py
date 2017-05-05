@@ -22,14 +22,21 @@ class Quantum_Operation(object):
         Inputs:  - initial_state: generally without the ancilla;
                                   should be a list of lists:
                                   (1) stabs and (2) destabs.
+                                  can also be an empty list in case the circuit
+                                  already has prep gates.  This is the case for 
+                                  the verification of the 8-qubit cat state.
                  - circuits: list of circuits that will be run
                              serially on chp.
         '''
+            
         self.stabs = initial_state[0][:]
         self.destabs = initial_state[1][:]
-        self.n_d_q = len(self.stabs)  
-        # number of total data qubits in the whole "supra circuit", not
-        # necessarily in this particular circuit.
+        if len(self.stabs) == 0:
+            self.n_d_q = len(circuits[0].data_qubits())
+        else:
+            self.n_d_q = len(self.stabs)  
+            # number of total data qubits in the whole "supra circuit", not
+            # necessarily in this particular circuit.
 
         self.circuits = circuits[:]
         self.chp_loc = chp_location
@@ -609,6 +616,20 @@ class QEC_d3(Quantum_Operation):
 
         return len(data_error1), len(data_error2)
 
+
+
+
+class QEC_d5(Quantum_Operation):
+    '''
+    '''
+
+    def create_and_verify_8cat_state(self, circ):
+        '''
+        '''
+
+        output_dict = self.run_one_circ(circ)
+        
+        return output_dict
         
 
 

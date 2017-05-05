@@ -126,6 +126,9 @@ class Chper(object):
 		self.final_destabs = []
 
 		#print self.case
+		#print self.input_states
+		
+		#print 'qubit_num_map', self.qubit_num_map
 
 		self.input_output_files = input_output_files
 		if self.input_output_files:
@@ -178,16 +181,24 @@ class Chper(object):
 		"""
 		#for i,q in enumerate(self.circ.qubits()):
 		#	self.qubit_num_map[q] = i
+		
+		max_data_q = max([q.qubit_id for q in self.circ.data_qubits()])
+		min_data_q = min([q.qubit_id for q in self.circ.data_qubits()])
+		if max_data_q+1 > self.num_d_qub:
+			ref_data_q = min_data_q
+		else:
+			ref_data_q = 0 
+		
 		if self.num_a_qub > 0:	
 			first_anc_id = self.circ.ancilla_qubits()[0].qubit_id
 		for i,q in enumerate(self.circ.qubits()):
 			if q.qubit_type == 'data':
-				self.qubit_num_map[q] = q.qubit_id
+				self.qubit_num_map[q] = q.qubit_id - ref_data_q
 			elif q.qubit_type == 'ancilla':
 				self.qubit_num_map[q] = q.qubit_id-first_anc_id \
 							+self.num_d_qub		
 		#print first_anc_id
-		#print self.qubit_num_map
+		#print 'qubit_num_map', self.qubit_num_map
 		gates = []
 
                 if isinstance(self.circ.gates[0], circuit.Physical_Gate):
@@ -230,6 +241,8 @@ class Chper(object):
 		if gate.gate_name in self.preparations:
 			#print gate.gate_name, gate.qubits[0].qubit_id
 			ind = self.qubit_num_map[gate.qubits[0]]
+			#print gate.qubits[0]
+			#oprint ind
 			#if ind < len(self.input_states):
 			#	self.input_states[ind] = self.preparations[gate.gate_name]
 			#else:
