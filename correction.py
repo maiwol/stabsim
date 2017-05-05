@@ -521,6 +521,92 @@ class Cat_Correct:
         return total_circ
 
 
+    
+    @classmethod
+    def create_stabs_d5_color_code(cls, initial_I, stabs, meas_errors, Is_after_two,
+                                   rep_verif_weight8, rep):
+
+        '''
+        stabs are of the form [('X',8), ('X',3), ...]
+        The weight-8 stab must always come first
+        '''
+        
+        if len(stabs[0]) != 8:
+            raise TypeError('The first stabilizer must always be the weight-8 one.')
+
+        n_q = 17
+        total_circ = Circuit()
+        if initial_I:
+            for i in range(17):
+                total_circ.add_gate_at([i], 'I')
+        #    for i in range(17,17+8):
+        #        total_circ.add_gate_at([i], 'I_noerror')
+        
+        stab_kind = stabs[0][0][0]  # X or Z
+        stabs_indices = [[oper[1] for oper in stabilizer] for stabilizer in stabs]
+
+        # First we add the octagon stabilizer
+        octagon_circ = Cat_Correct.measure_weight8_stab(rep_verif_weight8,
+                                                        meas_errors, 
+                                                        Is_after_two,
+                                                        stab_kind)
+        
+        octagon_range = stabs_indices[0][:] + range(n_q,n_q+8)
+        total_circ.join_circuit_at(octagon_range, octagon_circ)
+
+        # Next we add the other seven
+        stabs_orig = []
+        for stabilizer in stabs_indices[1:]:
+            stabs_orig += [[stab_kind if i in stabilizer else 'I' for i in range(n_q)]]
+    
+        gate_name = 'Weight4_stabs' + stab_kind
+        cat_circ_method = Cat_Correct.create_4_cat_diVincenzo
+        rest_circ = Cat_Correct.create_4_cat_stabilizer(n_q, False, stabs_orig, 
+                                                        cat_circ_method, gate_name, rep, 
+                                                        meas_errors, Is_after_two)
+
+        total_circ.join_circuit(rest_circ)
+        total_circ = Encoded_Gate('Stabs%s_%i'%(stab_kind,rep), [total_circ]).circuit_wrap()
+
+        return total_circ
+
+
+
+    @classmethod
+    def EC_d5_color_code(cls, initial_I, stabs, meas_errors, Is_after_two, 
+                         rep_verif_w8, redun):
+        '''
+        '''
+        
+        total_circ = Circuit()
+
+        stabs_X = stabs[:8]
+        stabs_Z = stabs[8:]
+
+        for rep in range(redun):
+            stab_circ_X = Cat_Correct.create_stabs_d5_color_code(initial_I, 
+                                                                 stabs_X,
+                                                                 meas_errors,
+                                                                 Is_after_two,
+                                                                 rep_verif_w8,
+                                                                 rep+1)
+            total_circ.join_circuit(stab_circ_X)
+           
+            # after first round we set initial_I to False
+            initial_I = False
+            stab_circ_Z = Cat_Correct.create_stabs_d5_color_code(initial_I, 
+                                                                 stabs_Z,
+                                                                 meas_errors,
+                                                                 Is_after_two,
+                                                                 rep_verif_w8,
+                                                                 rep+1)
+            total_circ.join_circuit(stab_circ_Z)
+
+        total_circ = Encoded_Gate('QEC_d5', [total_circ]).circuit_wrap()
+
+        return total_circ
+
+
 
     @classmethod
     def create_4_cat_verify(cls,stabilizer=['X','X','X','X']):
@@ -717,8 +803,103 @@ class Cat_Correct:
 
         return cat_circuit
 
-        
     
+    
+    @classmethod
+    def create_8_cat_verify(cls, meas_errors=True,
+                            Is_after_two=False):
+        '''
+        creates an 8-qubit cat state and verifies it twice.
+        The verification involves measuring the parity of the first
+        and eighth qubits.  
+        This is used to measure the weight-8 stabilizer in the 4.8.8
+        color code.  
+        We have to verify twice to detect w-2 errors that propagate
+        to form uncorrectable w-3 errors.
+        if meas_errors == True: the measurements are faulty.
+        if Is_after_two == True: we add I gates after 2-qubit gates.
+                                 this is used on the ion_trap_simple
+                                 error model.
+        ''' 
+        cat_circuit = Circuit()
+        for index in range(10):
+            if index==3:
+                cat_circuit.add_gate_at([index],'PrepareXPlus')
+            else:
+                cat_circuit.add_gate_at([index],'PrepareZPlus')
+        list_CNOTs = [[3,4], [4,5], [5,6], [6,7], [3,2], [2,1], [1,0],
+                      [0,8], [7,8], [0,9], [7,9]]
+        
+        for CNOT in list_CNOTs:
+            cat_circuit.add_gate_at(CNOT,'CX')
+            if Is_after_two:
+                cat_circuit.add_gate_at([CNOT[0]], 'I')
+                cat_circuit.add_gate_at([CNOT[1]], 'I')
+        
+        if meas_errors:
+            cat_circuit.add_gate_at([8], 'ImZ')
+            cat_circuit.add_gate_at([9], 'ImZ')
+        cat_circuit.add_gate_at([8], 'MeasureZ')
+        cat_circuit.add_gate_at([9], 'MeasureZ')
+
+        cat_circuit.replace_qubit_ids(range(8,18))
+
+        #cat_circuit.to_ancilla([8,9])
+        cat_circuit = Encoded_Gate('prep_cat_8', [cat_circuit]).circuit_wrap()
+
+        return cat_circuit
+    
+    
+
+    @classmethod
+    def repeat_prep_8_cat(cls, rep, meas_errors, Is_after_two):
+        '''
+        Repeats the preparation and verification of an 8-qubit cat state
+        "rep" times.  
+        This is a somewhat artificial way for the fast sampler to handle 
+        the unpredictibility of the number of times we'll have to prepare
+        the 8-qubit cat state.
+        '''
+    
+        rep_cat_circ = Circuit()
+        for i in range(rep):
+            cat_circuit = Cat_Correct.create_8_cat_verify(meas_errors, Is_after_two)
+            rep_cat_circ.join_circuit(cat_circuit)        
+        
+        rep_cat_circ.to_ancilla([16,17])
+        rep_cat_circ = Encoded_Gate('rep_cat_8_%i'%rep, [rep_cat_circ]).circuit_wrap()
+
+        return rep_cat_circ
+    
+
+
+    @classmethod
+    def measure_weight8_stab(cls, rep, meas_errors, Is_after_two, stab='X'):
+        '''
+        '''
+
+        weight8_circ = Cat_Correct.repeat_prep_8_cat(rep, meas_errors, Is_after_two)
+        
+        coupling_circ = Circuit()
+        for i in range(8):
+            coupling_circ.add_gate_at([i+8, i], 'C'+stab)
+            if Is_after_two:
+                coupling_circ.add_gate_at([i+8], 'I')
+                coupling_circ.add_gate_at([i], 'I')
+
+        for i in range(8,16):
+            if meas_errors:
+                coupling_circ.add_gate_at([i], 'ImX')
+            coupling_circ.add_gate_at([i], 'MeasureX')
+
+        coupling_circ = Encoded_Gate('coupling_to_data', [coupling_circ]).circuit_wrap()
+        weight8_circ.join_circuit(coupling_circ)
+        weight8_circ = Encoded_Gate('weight8_S'+stab, [weight8_circ]).circuit_wrap()
+        
+        return weight8_circ
+
+    
+
     @classmethod    
     def create_4_cat_no_verify_correction(cls,stabilizer=['X','X','X','X']):
         #specify correction circuit
