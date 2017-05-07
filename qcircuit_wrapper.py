@@ -1,4 +1,5 @@
 import sys
+import copy
 import circuit as cir
 import steane as st
 import chper_extended as chper
@@ -41,7 +42,7 @@ class Quantum_Operation(object):
         self.circuits = circuits[:]
         self.chp_loc = chp_location
         self.CHP_IO_files = CHP_IO_files
-
+        #print 'n_data =', self.n_d_q
 
 
     def run_one_circ(self, circuit): 
@@ -619,17 +620,70 @@ class QEC_d3(Quantum_Operation):
 
 
 
+
+class Verify_CatState(Quantum_Operation):
+    '''
+    '''
+
+    def create_and_verify_8cat_state(self):
+        '''
+        rep_cat_gate should be a logical gate composed with
+        n preps and verifications of an 8-qubit cat state
+        '''
+
+        for ver_i in range(len(self.circuits)):
+            self.stabs, self.destabs = [], []
+            #local_circ = copy.deepcopy(ver_gates[ver_i].circuit_list[0])
+            #local_circ = local_circ.replace_qubit_ids(range(8))
+            #local_circ.update_map()
+            #brow.from_circuit(local_circ, True)
+            output_dict = self.run_one_circ(ver_i)
+            outcomes = [outcome[0] for outcome in output_dict.values()]
+            if outcomes[0]==0 and outcomes[1]==0:
+                break
+
+        # number of times we had to prep the cat state
+        n_cat = ver_i + 1
+
+        return n_cat
+
+
+
 class QEC_d5(Quantum_Operation):
     '''
     '''
 
-    def create_and_verify_8cat_state(self, circ):
-        '''
-        '''
 
-        output_dict = self.run_one_circ(circ)
+    def measure_octagon(self, weight8_gate):
+        '''
+        measures the weight-8 stabilizer
+        weight8_circ should be a gate with 2 logical gates:
+        (1) the prep and verification of 8-qubit cat state
+        (2) its coupling to the data qubits
+
+        Outputs:  (1) the parity of the stabilizer measurement.
+                  (2) the number of times the cat-state verf was done.
+        '''
+       
+        prep_8cat = weight8_gate.circuit_list[0].gates[0]
+        ver_circs = [g.circuit_list[0] for g in prep_8cat.circuit_list[0].gates]
+        ver_oper = Verify_CatState([[],[]], ver_circs, self.chp_loc)
+        n_cat = ver_oper.create_and_verify_8cat_state()
+       
+        # copy the circuit where we couple the cat state to the data
+        couple_8cat = weight8_gate.circuit_list[0].gates[1]
+        couple_circ = copy.deepcopy(couple_8cat.circuit_list[0])
+        # convert the last 8 qubits to ancillary qubits (only on the copy)
+        couple_circ.to_ancilla(range(17,17+8))
+
+        self.stabs, self.destabs = qfun.combine_stabs(
+                                            [self.stabs, ver_oper.stabs],
+                                            [self.destabs, ver_oper.destabs])
         
-        return output_dict
+        oct_dict = self.run_one_circ(couple_circ)
+        oct_parity = sum([outcome[0] for outcome in oct_dict.values()])%2
+
+        return oct_parity, n_cat
         
 
 
