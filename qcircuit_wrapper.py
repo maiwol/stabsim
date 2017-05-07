@@ -95,7 +95,7 @@ class Quantum_Operation(object):
         pre_Is = ['I' for i in range(pre_ns)]
         post_ns = len(self.stabs) - max(data_q_ids) - 1
         post_Is = ['I' for i in range(post_ns)]
-        
+
         output_dict = self.run_one_circ(circuit)
         n_first_anc = min(output_dict.keys())
         data_errors, hook_errors = qfun.stabs_QEC_diVin(output_dict,
@@ -685,6 +685,21 @@ class QEC_d5(Quantum_Operation):
 
         return oct_parity, n_cat
         
+
+
+    def measure_stabilizers_one_kind(self, stab_gate, stab_kind):
+        '''
+        '''
+
+        octagon_gate = stab_gate.circuit_list[0].gates[0]
+        other_stabs_gate = stab_gate.circuit_list[0].gates[1]
+
+        oct_par, n_cat = self.measure_octagon(octagon_gate)
+        
+        other_stabs_oper = Quantum_Operation([self.stabs[:], self.destabs[:]],
+                                             other_stabs_gate.circuit_list[:],
+                                             self.chp_loc)
+        other_stabs_oper.run_one_diVincenzo(0, 'd5color', stab_kind)
 
 
 

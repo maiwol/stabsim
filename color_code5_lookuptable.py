@@ -1,17 +1,17 @@
 import sys
 import numpy as np
 import itertools as it
-
+import json
 
 # total number of physical qubits
 n_total = 17
 
 stabs = [
+            [2,3,6,5,9,10,13,14],
             [0,1,2,3],
             [0,2,4,5],
             [4,5,8,9],
             [8,9,12,13],
-            [2,3,5,6,9,10,13,14],
             [6,7,10,11],
             [10,11,14,15],
             [7,11,15,16]
@@ -254,26 +254,156 @@ tricky_meas_errors = [
                      ]
 tricky_total_errors = tricky_errors + tricky_meas_errors
 
-good_schedules = []
-index = 0
-octagon = stabs[4][:]
-for sched in it.permutations(octagon):
-    index += 1
-    sched = list(sched)
-    new_lookuptable = dict(lookuptable)
-    log_parity = 0
-    for err in tricky_total_errors:
-        new_err = [sched[q] for q in err]
-        bin_err = convert_to_binary(new_err)
-        syn = tuple(error_to_syndrome(bin_err))
-        if syn not in new_lookuptable:
-            new_lookuptable[syn] = bin_err
-        else:
-            after_corr, num_corr = correct_until_in_codespace(bin_err, new_lookuptable, 0)
-            log_parity = overlapping_parity(after_corr, tuple(convert_to_binary(logical_oper)))
-            if log_parity == 1:
-                break
-    if log_parity == 0:
-        good_schedules += [sched]
+#good_schedules = []
+#index = 0
+octagon = stabs[0][:]
+#for sched in it.permutations(octagon):
+#    index += 1
+#    sched = list(sched)
+#    new_lookuptable = dict(lookuptable)
+#    log_parity = 0
+#    for err in tricky_errors:
+#        new_err = [sched[q] for q in err]
+#        bin_err = convert_to_binary(new_err)
+#        syn = tuple(error_to_syndrome(bin_err))
+#        if syn not in new_lookuptable:
+#            new_lookuptable[syn] = bin_err
+#        else:
+#            after_corr, num_corr = correct_until_in_codespace(bin_err, new_lookuptable, 0)
+#            log_parity = overlapping_parity(after_corr, tuple(convert_to_binary(logical_oper)))
+#            if log_parity == 1:
+#                break
+#    if log_parity == 0:
+#        good_schedules += [sched]
 
+
+new_lookuptable = dict(lookuptable)
+log_parity = 0
+for err in tricky_errors:
+    new_err = [octagon[q] for q in err]
+    bin_err = convert_to_binary(new_err)
+    syn = tuple(error_to_syndrome(bin_err))
+    if syn not in new_lookuptable:
+        new_lookuptable[syn] = bin_err
+    else:
+        after_corr, num_corr = correct_until_in_codespace(bin_err, new_lookuptable, 0)
+        log_parity = overlapping_parity(after_corr, tuple(convert_to_binary(logical_oper)))
+        if log_parity == 1:
+            print 'YOURE FUCKED!'
+        
+
+
+# Functions from Cross
+def binary_to_decimal(string):
+    '''
+    '''
+    num = 0
+    max_power = len(string) - 1
+    for i in range(len(string)):
+        num += int(string[i])*2**(max_power - i)
+    return num
+
+
+def decimal_to_binary(num, length_list=6):
+    '''
+    Binary representation of a number
+    Taken from functions.py'''
+    binary = []
+    for i in range(length_list):
+        binary.insert(0, num&1)
+        num = num >> 1
+    return binary
+
+
+def add_strings(s1, s2):
+    '''
+    Apply XOR to two bitstrings
+    '''
+    l = [ord(a)^ord(b) for a,b in zip(s1,s2)]
+    s3 = ''.join(map(str,l))
+    
+    return s3
+
+
+
+def from_string_to_list(s):
+    '''
+    The inverse function of 'from_list_to_string'
+    '''
+    oper = []
+    for i in range(len(s)):
+        if s[i]=='0':
+            oper += ['I']
+        else:
+            oper += ['E']
+
+    return oper
+
+
+
+
+def add_two_dics(dic1, dic2):
+    '''
+    add two dictionaries corresponding to lookup tables
+    for measurement outcome decoding
+    '''
+
+    # dic3 is the resulting dictionary
+    dic3 = {}
+    for i in range(len(dic1)):
+        for j in range(len(dic2)):
+            m1 = dic1.keys()[i]
+            m2 = dic2.keys()[j]
+            m1_bin = ''.join(map(str,decimal_to_binary(m1,8)))
+            m2_bin = ''.join(map(str,decimal_to_binary(m2,8)))
+            
+            #print m1
+            #print m2
+            #print m1_bin
+            #print m2_bin
+            
+            m3_bin = add_strings(m1_bin, m2_bin)
+            m3 = binary_to_decimal(m3_bin)
+
+            #print m3_bin
+            #print m3
+
+            # if that measurement outcome is already
+            # in one of the dictionaries, don't add it. 
+            if (m3 in dic1.keys()) or (m3 in dic2.keys() or m3 in dic3.keys()):
+                continue
+
+            s3 = add_strings(map(str,dic1[m1]), map(str,dic2[m2]))
+            # if the syndrome is already in one of the 
+            # dictionaries, don't add it.
+            if (s3 in dic1.values()) or (s3 in dic2.values()):
+                continue
+
+            dic3[m3] = s3
+
+    return dic3
+
+
+new_lookuptable_decimal = {}
+for entry in new_lookuptable:
+    new_lookuptable_decimal[binary_to_decimal(entry)] = ''.join(map(str,new_lookuptable[entry]))
+
+
+dic3 = add_two_dics(new_lookuptable_decimal, new_lookuptable_decimal)
+final_dic = {}
+for key in new_lookuptable_decimal:
+    syn = new_lookuptable_decimal[key]
+    final_dic[key] = from_string_to_list(syn)
+for key in dic3:
+    syn = dic3[key]
+    final_dic[key] = from_string_to_list(syn)
+
+print len(new_lookuptable_decimal)
+print len(dic3)
+
+json_filename = 'complete_lookup_table_d5.json'
+json_file = open(json_filename, 'w')
+json.dump(final_dic, json_file, indent=4, separators=(',', ':'),
+      sort_keys=True)
+json_file.close()
 
