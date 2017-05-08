@@ -79,7 +79,8 @@ class Quantum_Operation(object):
        
     
     
-    def run_one_diVincenzo(self, circuit, code, stab_kind=None):
+    def run_one_diVincenzo(self, circuit, code, stab_kind=None,
+                           parity_oct=0):
         '''
         runs one round of X or Z stabilizers (for a CSS code)
         or the whole set of stabilizers (for a non-CSS code)
@@ -87,6 +88,9 @@ class Quantum_Operation(object):
         circuit refers to the index of the circuit to be run.
         Based on "code", we then correct the hook errors and
         return the data errors.
+        
+        parity_oct refers to the parity of the weight-8 
+        stabilizer, which is measured at a previous step.
         '''
 
         data_qs = self.circuits[circuit].data_qubits()
@@ -101,7 +105,9 @@ class Quantum_Operation(object):
         data_errors, hook_errors = qfun.stabs_QEC_diVin(output_dict,
                                                         n_first_anc,
                                                         code,
-                                                        stab_kind)
+                                                        stab_kind,
+                                                        False,
+                                                        parity_oct)
 
         if hook_errors.count('I') != len(hook_errors):
             hook_errors = pre_Is + hook_errors + post_Is
@@ -699,7 +705,17 @@ class QEC_d5(Quantum_Operation):
         other_stabs_oper = Quantum_Operation([self.stabs[:], self.destabs[:]],
                                              other_stabs_gate.circuit_list[:],
                                              self.chp_loc)
-        other_stabs_oper.run_one_diVincenzo(0, 'd5color', stab_kind)
+        
+        dat_err = other_stabs_oper.run_one_diVincenzo(0, 'd5color', 
+                                                      stab_kind, oct_par)
+        self.stabs = other_stabs_oper.stabs[:]
+        self.destabs = other_stabs_oper.destabs[:]
+            
+        return dat_err
+
+
+
+    def  
 
 
 

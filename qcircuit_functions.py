@@ -4,8 +4,33 @@ import circuit as c
 import cross
 import steane
 import fivequbit
+import d5color
 import correction as cor
 from visualizer import browser_vis as brow
+
+
+
+
+def binary_to_decimal(string):
+    '''
+    '''
+    num = 0
+    max_power = len(string) - 1
+    for i in range(len(string)):
+        num += int(string[i])*2**(max_power - i)
+    return num
+
+
+
+def decimal_to_binary(num, length_list=6):
+    '''
+    Binary representation of a number
+    Taken from functions.py'''
+    binary = []
+    for i in range(length_list):
+        binary.insert(0, num&1)
+        num = num >> 1
+    return binary
 
 
 
@@ -162,20 +187,40 @@ def update_errors_anc(current_errors, stab):
 
 
 def stabs_QEC_diVin(dic, n_first_anc, code, stab_kind=None,
-                    within_M=False):
+                    within_M=False, parity_oct=0):
     '''
     After one round of either X or Z stabs (for a CSS code)
     or the whole set of stabs (for a non-CSS code),
     with an unverified cat state, we first correct the hook 
     errors (errors that propagated from ancilla to data),
     and then return the correction for the data errors.
+    
+    parity_oct refers to the parity of the weight-8 stabilizer
+    in the d5 color code, which is measured at a previous
+    step.
     '''
     
     # so far only Steane and 5qubit codes
     
     extra_s = 0  # little hack to get the stabilizer right
 
-    if code == 'Steane':
+    
+    if code == 'd5color':
+        # Notice the s=7 because we omit the first stab (octagon)
+        n_q, s, w = 17, 7, 4
+        # What was within_M?
+        code_class = d5color.Code
+        if type(stab_kind) != type(''):
+            raise TypeError('stab_kind either X or Z.')
+        if stab_kind == 'Z':
+            extra_s = 8 + 1
+            error = 'X'
+        else:
+            extra_s = 1
+            error = 'Z'
+
+    
+    elif code == 'Steane':
         n_q, s, w = 7, 3, 4
         if within_M:  s = 2
         code_class = steane.Code
@@ -209,9 +254,16 @@ def stabs_QEC_diVin(dic, n_first_anc, code, stab_kind=None,
             stab = code_class.stabilizer[i + extra_s]
             prop_corr = update_errors_anc(prop_corr,
                                           stab)
+
+    if code == 'd5color':
+        data_error.insert(0, parity_oct)
+        data_error_int = binary_to_decimal(data_error)
+        data_corr = code_class.lookuptable_str[str(data_error_int)]
     
-    data_corr = code_class.stabilizer_syndrome_dict[tuple(data_error)]
-    if code == 'Steane':
+    else:
+        data_corr = code_class.stabilizer_syndrome_dict[tuple(data_error)]
+    
+    if code == 'Steane' or code == 'd5color':
         data_corr = [i if i == 'I' else error for i in data_corr]   
     
     return data_corr, prop_corr
