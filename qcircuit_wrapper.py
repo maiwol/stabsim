@@ -715,7 +715,83 @@ class QEC_d5(Quantum_Operation):
 
 
 
-    def  
+    def run_fullQEC_CSS(self):
+        '''
+        runs QEC for the distance-5 4.8.8 color code.
+        At the end, it applies a correction.
+        It returns the number of QEC rounds.
+        It assumes the X stabilizers come first.
+        pre_n:  number of physical qubits before the physical
+                qubits onto which this QEC is acting.
+        post_n: number of physical qubits after the physical
+                qubits onto which this QEC is acting.
+        '''
+
+        circ_to_run = self.circuits[0].gates[0].circuit_list[0]
+        QEC_func = self.measure_stabilizers_one_kind
+
+        #data_qs = self.circuits[0].data_qubits()
+        #data_q_ids = [q.qubit_id for q in data_qs]
+        #pre_ns = min(data_q_ids)
+        #pre_Is = ['I' for i in range(pre_ns)]
+        #post_ns = len(self.stabs) - max(data_q_ids) - 1
+        #post_Is = ['I' for i in range(post_ns)]
+        #print 'pre =', pre_ns
+        #print 'post =', post_ns
+        
+        # to make things quicker; change this later
+        pre_Is, post_Is = [], []
+
+        
+        Z_data_errors, X_data_errors = [], []
+
+        list_subs = range(10)
+        while len(list_subs) > 0:
+            next_sub = list_subs.pop(0)
+            if next_sub%2 == 0:
+                residue = 0
+                stab_kind = 'X'
+                data_errors = Z_data_errors
+            else:
+                residue = 1
+                stab_kind = 'Z'
+                data_errors = X_data_errors
+        
+            data_errors += [self.measure_stabilizers_one_kind(
+                                    circ_to_run.gates[next_sub],
+                                    stab_kind)]
+
+            if len(data_errors) < 3:  continue
+
+            if (data_errors[-3]==data_errors[-2]) and (data_errors[-2]==data_errors[-1]):
+                list_subs = qfun.remove_given_parity(list_subs, residue)
+
+        Z_corr = Z_data_errors[-1]
+        X_corr = X_data_errors[-1]
+
+        # update the final states only if a correction
+        # is needed, to save some time
+        if 'Z' in Z_corr:
+            #print 'stabs =', self.stabs
+            #print 'Z_corr =', Z_corr
+            Z_corr = pre_Is[:] + Z_corr[:] + post_Is[:]
+            #print 'Z_corr =', Z_corr
+            corr_state = qfun.update_stabs(self.stabs,
+                                           self.destabs,
+                                           Z_corr)
+            self.stabs = corr_state[0][:]
+            self.destabs = corr_state[1][:]
+        
+        if 'X' in X_corr:
+            X_corr = pre_Is[:] + X_corr[:] + post_Is[:]
+            corr_state = qfun.update_stabs(self.stabs,
+                                           self.destabs,
+                                           X_corr)
+            #print 'X_corr =', X_corr
+            self.stabs = corr_state[0][:]
+            self.destabs = corr_state[1][:]
+
+        return len(Z_data_errors), len(X_data_errors)
 
 
 

@@ -10,6 +10,18 @@ from visualizer import browser_vis as brow
 
 
 
+def remove_given_parity(list_elements, parity):
+    '''
+    Removes the elements of a given parity from the list
+    '''
+    new_list = []
+    for elem in list_elements:
+        if elem%2 != parity:
+            new_list += [elem] 
+
+    return new_list
+
+
 
 def binary_to_decimal(string):
     '''
@@ -328,6 +340,9 @@ def create_EC_subcircs(code, Is_after2q, initial_I=True,
     # circuit to distinguish between correctable and uncorrectable
     # errors
     if perfect_EC:
+        if code == 'd5color':
+            n_data = 17
+            code_stabs = d5color.Code.stabilizer_alt[:]
         if code == 'Cross':
             n_data = 7
             code_stabs = cross.Code.stabilizer_alt[:]
