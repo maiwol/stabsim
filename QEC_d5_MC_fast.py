@@ -34,7 +34,7 @@ else:  FT = False
 
 n_errors = [int(sys.argv[4]), int(sys.argv[5])]
 
-
+'''
 stabs = [
           [2,3,6,5,9,10,13,14],
           [0,1,2,3],
@@ -50,7 +50,7 @@ color_stabs = []
 for stab_kind in ['X','Z']:
     for stab in stabs:
         color_stabs += [[[stab_kind, index] for index in stab]]
-
+'''
 initial_I = False
 meas_errors, Is_after_two = True, Is_after2q
 rep_w8, redun = 5, 5
@@ -109,18 +109,52 @@ def gates_list_QECd5(QECd5_circ, faulty_gates_names):
     return single_qubit_gates, two_qubit_gates
     
 
-QECd5_circ = cor.Cat_Correct.EC_d5_color_code(initial_I, color_stabs, meas_errors, Is_after_two,
-                                        rep_w8, redun)
-one_q_gates, two_q_gates = gates_list_QECd5(QECd5_circ, error_dict.keys())
-
-
-
-def run_QECd5(init_state, QECcirc):
+def gates_list_QECd5_bare_anc(QECd5_circ, faulty_gates_names):
     '''
     '''
 
-    q_oper = qwrap.QEC_d5(init_state, [QECcirc], chp_location)
-    n_X, n_Z = q_oper.run_fullQEC_CSS()
+    single_qubit_gates, two_qubit_gates = [], []
+    for i in range(len(QECd5_circ.gates)):
+        supra_gate = QECd5_circ.gates[i]
+        for j in range(len(supra_gate.circuit_list[0].gates)):
+            in_gate1 = supra_gate.circuit_list[0].gates[j]
+            for k in range(len(in_gate1.circuit_list[0].gates)):
+                in_gate2 = in_gate1.circuit_list[0].gates[k]
+                for l in range(len(in_gate2.circuit_list[0].gates)):
+                    in_gate3 = in_gate2.circuit_list[0].gates[l]
+                    if in_gate3.gate_name in faulty_gates_names:
+                        if len(in_gate3.qubits) == 1:
+                            single_qubit_gates.append((i,j,k,l))
+                        elif len(in_gate3.qubits) == 2:
+                            two_qubit_gates.append((i,j,k,l))
+
+    return single_qubit_gates, two_qubit_gates
+                
+
+
+#QECd5_circ = cor.Cat_Correct.EC_d5_color_code(initial_I, color_stabs, meas_errors, 
+#                                              Is_after_two, rep_w8, redun)
+#one_q_gates, two_q_gates = gates_list_QECd5(QECd5_circ, error_dict.keys())
+
+
+QECd5_FT1_3rep_circ = qfun.create_EC_subcircs('d5color', Is_after_two, initial_I)
+#QECd5_FT1_5rep_circ = qfun.create_EC_subcircs('d5color', Is_after_two, initial_I,
+#                                              False, False, 5)
+one_q_gates, two_q_gates = gates_list_QECd5_bare_anc(QECd5_FT1_3rep_circ, 
+                                                      error_dict.keys())
+
+
+
+def run_QECd5(init_state, QECcirc, bare_anc=True, rep=3):
+    '''
+    '''
+    if bare_anc:
+        q_oper = qwrap.QEC_d5(init_state, [QECcirc], chp_location)
+        n_X, n_Z = q_oper.run_bare_anc(rep)
+
+    else:
+        q_oper = qwrap.QEC_d5(init_state, [QECcirc], chp_location)
+        n_X, n_Z = q_oper.run_fullQEC_CSS()
 
     final_stabs = q_oper.stabs[:]
     final_destabs = q_oper.destabs[:]
@@ -166,8 +200,9 @@ def run_several_latt_fast(error_info, n_runs_total, init_state):
     n_fails = 0
     for n_run in xrange(n_runs_total):
         # create the supra-circuit and insert gates
-        QECd5_circ = cor.Cat_Correct.EC_d5_color_code(initial_I, color_stabs, meas_errors, 
-                                                      Is_after_two, rep_w8, redun)
+        QECd5_circ = cor.Cat_Correct.EC_d5_color_code(initial_I, color_stabs, 
+                                                      meas_errors, Is_after_two, 
+                                                      rep_w8, redun)
                                                                                    
         # shuffle gate indices
         rd.shuffle(one_q_gates)
@@ -223,11 +258,74 @@ def run_several_latt_fast(error_info, n_runs_total, init_state):
 
 
 
+def run_several_latt_fast_QEC_rep3(error_info, n_runs_total, init_state):
+    '''
+    '''
+
+    n_fails = 0
+    for n_run in xrange(n_runs_total):
+        # create the supra-circuit and insert gates
+        QECd5_circ = qfun.create_EC_subcircs('d5color', Is_after_two, initial_I)
+                                                                                   
+        # shuffle gate indices
+        rd.shuffle(one_q_gates)
+        rd.shuffle(two_q_gates)
+
+        selected_one_q_gates = one_q_gates[ : n_errors[0]]
+        selected_two_q_gates = two_q_gates[ : n_errors[1]]
+
+
+        #print selected_one_q_gates
+        #print selected_two_q_gates
+
+        # group the selected gates
+        total_selected_gates = selected_one_q_gates + selected_two_q_gates
+        gate_groups = []
+        for gate in total_selected_gates:
+            in_group = False
+            for group in gate_groups:
+                for g in group:
+                    if g[:-1] == gate[:-1]:
+                        group.insert(0, gate)
+                        in_group = True
+                        break
+            
+            if not in_group:
+                gate_groups += [[gate]]
+
+
+        # insert errors
+        for group in gate_groups:
+            local_gates = [g[-1] for g in group]
+            if len(group[0]) >= 2:
+                faulty_circ = QECd5_circ.gates[group[0][0]].circuit_list[0]
+            if len(group[0]) >= 3:
+                faulty_circ = faulty_circ.gates[group[0][1]].circuit_list[0]
+            if len(group[0]) == 4:
+                faulty_circ = faulty_circ.gates[group[0][2]].circuit_list[0]
+
+            error.add_error_alternative(faulty_circ, error_info, 'Muyalon', local_gates)
+
+
+        # run the faulty circuit
+        init_state_copy = init_state[0][:], init_state[1][:]
+        fail = run_QECd5(init_state_copy, QECd5_circ)
+        if fail:  n_fails += 1
+
+        #print 'Fail', fail
+
+    return n_fails
+
+
+
+
+
 
 def run_parallel_latt(error_info, n_runs_per_proc, n_proc, init_state, sampling='Muyalon'):
     '''
     '''
-    if sampling == 'Muyalon':  sim_func = run_several_latt_fast
+    #if sampling == 'Muyalon':  sim_func = run_several_latt_fast
+    if sampling == 'Muyalon':  sim_func = run_several_latt_fast_QEC_rep3
     else:  sim_func = run_several_latt
 
     pool = mp.Pool(n_proc)

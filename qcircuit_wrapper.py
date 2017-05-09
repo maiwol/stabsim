@@ -2,6 +2,7 @@ import sys
 import copy
 import circuit as cir
 import steane as st
+import d5color
 import chper_extended as chper
 import qcircuit_functions as qfun
 from visualizer import browser_vis as brow
@@ -712,6 +713,110 @@ class QEC_d5(Quantum_Operation):
         self.destabs = other_stabs_oper.destabs[:]
             
         return dat_err
+
+
+    
+    def run_bare_anc(self, redun=3):
+        '''
+        with bare anc
+        '''
+        
+        Z_data_errors, X_data_errors = [], []
+        do_X, do_Z = True, True
+
+        if redun==3:
+            for circ_ind in range(2):
+                if do_X:
+                    Xcirc = self.circuits[0].gates[2*circ_ind].circuit_list[0]
+                    Xcirc = Xcirc.gates[0].circuit_list[0].gates[0].circuit_list[0]
+                    Xcirc_oper = Quantum_Operation([self.stabs[:], self.destabs[:]],
+                                                   [Xcirc], self.chp_loc)
+                    out_dict = Xcirc_oper.run_one_circ(0)
+                    self.stabs, self.destabs = Xcirc_oper.stabs[:], Xcirc_oper.destabs[:]
+                    X_stabs = [out_dict[i][0] for i in range(17,17+8)]
+                    X_stabs_dec = qfun.binary_to_decimal(X_stabs)
+                    Z_err = d5color.Code.lookuptable_str[str(X_stabs_dec)]
+                    Z_err = [i if i=='I' else 'Z' for i in Z_err]
+                    Z_data_errors += [Z_err]
+                    if Z_err.count('Z') == 0:  do_X = False
+
+                if do_Z:
+                    Zcirc = self.circuits[0].gates[2*circ_ind+1].circuit_list[0]
+                    Zcirc = Zcirc.gates[0].circuit_list[0].gates[0].circuit_list[0]
+                    Zcirc_oper = Quantum_Operation([self.stabs[:], self.destabs[:]],
+                                                   [Zcirc], self.chp_loc)
+                    out_dict = Zcirc_oper.run_one_circ(0)
+                    self.stabs, self.destabs = Zcirc_oper.stabs[:], Zcirc_oper.destabs[:]
+                    Z_stabs = [out_dict[i][0] for i in range(17,17+8)]
+                    Z_stabs_dec = qfun.binary_to_decimal(Z_stabs)
+                    X_err = d5color.Code.lookuptable_str[str(Z_stabs_dec)]
+                    X_err = [i if i=='I' else 'X' for i in X_err]
+                    X_data_errors += [X_err]
+                    if X_err.count('X') == 0:  do_Z = False
+                
+
+
+            # if the outcomes of the 2 X stabs measurements
+            # don't coincide, do it a third time
+            if (do_X) and (Z_data_errors[0] != Z_data_errors[1]):
+                Xcirc = self.circuits[0].gates[4].circuit_list[0]
+                Xcirc = Xcirc.gates[0].circuit_list[0].gates[0].circuit_list[0]
+                Xcirc_oper = Quantum_Operation([self.stabs[:], self.destabs[:]],
+                                               [Xcirc], self.chp_loc)
+                out_dict = Xcirc_oper.run_one_circ(0)
+                self.stabs, self.destabs = Xcirc_oper.stabs[:], Xcirc_oper.destabs[:]
+                X_stabs = [out_dict[i][0] for i in range(17,17+8)]
+                X_stabs_dec = qfun.binary_to_decimal(X_stabs)
+                Z_err = d5color.Code.lookuptable_str[str(X_stabs_dec)]
+                Z_err = [i if i=='I' else 'Z' for i in Z_err]
+                Z_data_errors += [Z_err]
+                                
+
+
+            # same for the Z stabs
+            if (do_Z) and (X_data_errors[0] != X_data_errors[1]):
+                Zcirc = self.circuits[0].gates[5].circuit_list[0]
+                Zcirc = Zcirc.gates[0].circuit_list[0].gates[0].circuit_list[0]
+                Zcirc_oper = Quantum_Operation([self.stabs[:], self.destabs[:]],
+                                               [Zcirc], self.chp_loc)
+                out_dict = Zcirc_oper.run_one_circ(0)
+                self.stabs, self.destabs = Zcirc_oper.stabs[:], Zcirc_oper.destabs[:]
+                Z_stabs = [out_dict[i][0] for i in range(17,17+8)]
+                Z_stabs_dec = qfun.binary_to_decimal(Z_stabs)
+                X_err = d5color.Code.lookuptable_str[str(Z_stabs_dec)]
+                X_err = [i if i=='I' else 'X' for i in X_err]
+                X_data_errors += [X_err]
+
+            #print 'X_errors =', X_data_errors
+            #print 'Z_errors =', Z_data_errors
+
+            Z_corr, X_corr = Z_data_errors[-1], X_data_errors[-1]
+        
+
+            # update the final states only if a correction
+            # is needed, to save some time
+            if 'Z' in Z_corr:
+                #print 'stabs =', self.stabs
+                #print 'Z_corr =', Z_corr
+                #Z_corr = pre_Is[:] + Z_corr[:] + post_Is[:]
+                #print 'Z_corr =', Z_corr
+                corr_state = qfun.update_stabs(self.stabs,
+                                               self.destabs,
+                                               Z_corr)
+                self.stabs = corr_state[0][:]
+                self.destabs = corr_state[1][:]
+        
+            if 'X' in X_corr:
+                #X_corr = pre_Is[:] + X_corr[:] + post_Is[:]
+                corr_state = qfun.update_stabs(self.stabs,
+                                               self.destabs,
+                                               X_corr)
+                #print 'X_corr =', X_corr
+                self.stabs = corr_state[0][:]
+                self.destabs = corr_state[1][:]
+
+            return len(Z_data_errors), len(X_data_errors)
+
 
 
 

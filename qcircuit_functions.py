@@ -324,12 +324,13 @@ def stabs_QEC_bare_anc(dic, n_first_anc, code):
 
 
 def create_EC_subcircs(code, Is_after2q, initial_I=True,
-                       initial_trans=False, perfect_EC=False):
+                       initial_trans=False, perfect_EC=False,
+                       redun=3):
     '''
     creates circuit for distance-3 QEC: Cross, Shor, 5-qubit for now
     '''
 
-    redun = 3
+    #redun = 3
     verify = False
     ancilla_parallel = True
     diVincenzo = True
@@ -364,8 +365,38 @@ def create_EC_subcircs(code, Is_after2q, initial_I=True,
         
     else:
 
+        if code == 'd5color':
+            total_circ = c.Circuit()
+            n_data = 17
+            X_stabs = d5color.Code.stabilizer_alt[:8]
+            Z_stabs = d5color.Code.stabilizer_alt[8:]
+            for red in range(redun):
+                EC_circ = cor.Bare_Correct.generate_rep_bare_meas(n_data,
+                                                                  X_stabs,
+                                                                  1,
+                                                                  False,
+                                                                  meas_errors,
+                                                                  Is_after2q,
+                                                                  initial_trans,
+                                                                  ancilla_parallel)
+                EC_circ = c.Encoded_Gate('Sx%i'%(red+1), [EC_circ]).circuit_wrap()
+                total_circ.join_circuit(EC_circ)
+                EC_circ = cor.Bare_Correct.generate_rep_bare_meas(n_data,
+                                                                  Z_stabs,
+                                                                  1,
+                                                                  False,
+                                                                  meas_errors,
+                                                                  Is_after2q,
+                                                                  initial_trans,
+                                                                  ancilla_parallel)
+                EC_circ = c.Encoded_Gate('Sz%i'%(red+1), [EC_circ]).circuit_wrap()
+                total_circ.join_circuit(EC_circ)
+
+            return total_circ
+
+
         # Cross code uses bare ancillae
-        if code == 'Cross':
+        elif code == 'Cross':
             Cross_stabs = cross.Code.stabilizer_alt[:]
             n_subcircs = 3
             EC_circ = cor.Bare_Correct.generate_rep_bare_meas(7, Cross_stabs,
