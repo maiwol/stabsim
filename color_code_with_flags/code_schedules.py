@@ -51,7 +51,7 @@ def overlapping_parity(oper1, oper2):
 
 
 
-def error_to_syndrome(bin_err):
+def error_to_syndrome(bin_err, flag_octagon=0):
     '''
     assumes err is in binary form
     '''
@@ -60,6 +60,8 @@ def error_to_syndrome(bin_err):
     for stab in stabs:
         bin_stab = convert_to_binary(stab)
         syndrome += [overlapping_parity(bin_err, bin_stab)]
+
+    syndrome += [flag_octagon]
 
     return syndrome
 
@@ -83,14 +85,14 @@ def multiply_operators(oper0, oper1):
 
 
 
-def correct_until_in_codespace(err, lookuptable, num_corr=0):
+def correct_until_in_codespace(err, lookuptable, num_corr=0, flag_octagon=0):
     '''
     recursively corrects the err until the 
     resulting operators commutes with every
     stabilizer (no correction)
     '''
 
-    syn = tuple(error_to_syndrome(err))
+    syn = tuple(error_to_syndrome(err, flag_octagon))
     corr = lookuptable[syn]
     # if we don't have to correct
     if 1 not in corr:
@@ -167,6 +169,7 @@ for err in total_errors:
     # check to see if resulting operator commutes with logical operator
     log_parity = overlapping_parity(after_corr, tuple(convert_to_binary(logical_oper)))
     #print err, log_parity, num_corr, lookuptable[error_to_syn_dict[bin_err]]
+
 
 
 
@@ -256,6 +259,46 @@ tricky_meas_errors = [
                      ]
 tricky_total_errors = tricky_errors + tricky_meas_errors
 '''
+        
+# First let's try to figure out if we can have a bare ancilla
+# with no flag on any of the w-4 stabilizers
+        
+tricky_errors2 = errors_0 + errors_1
+log_parity_w4 = 0
+good_schedules_red1 = []
+for sched_red1 in it.permutations(stabs[7]):
+    new_lookuptable = dict(lookuptable)
+    sched_red1 = list(sched_red1)
+    new_err = [sched_red1[0], sched_red1[1]]
+    bin_err = convert_to_binary(new_err)
+
+    for err2 in tricky_errors2:
+        bin_err2 = convert_to_binary(err2)
+        comb_err = list(multiply_operators(bin_err, bin_err2))
+
+        syn = tuple(error_to_syndrome(comb_err, 0))
+        if syn not in new_lookuptable:
+            new_lookuptable[syn] = comb_err
+        else:
+            after_corr, num_corr = correct_until_in_codespace(comb_err, 
+                                                              new_lookuptable,
+                                                              0, 0)
+            log_parity_red1 = overlapping_parity(after_corr, 
+                                                 tuple(convert_to_binary(logical_oper)))
+            if log_parity_red1 == 1:
+                if new_err == [0,5]:
+                    print new_err
+                    print err2
+                    print syn
+                    print new_lookuptable[syn]
+                break
+        
+    
+    if log_parity_red1 == 0:
+        good_schedules_red1 += [sched_red1]
+
+print len(good_schedules_red1)
+sys.exit(0)
 
 # These are the tricky errors for the octagon (order-1)
 
@@ -265,7 +308,11 @@ tricky_errors = [
                   [0,1,2,3],
                   [5,6,7]
                 ]
-'''
+
+# good_schedules refers to the schedules for the measurement
+# of the octagon.  First we will add the errors of w-3 and w-4
+# that might propagate to the data without triggering the flag.
+# These will happen with probability p^2: 1 hook error + 1 meas error.
 good_schedules = []
 index = 0
 for sched in it.permutations(octagon):
@@ -276,7 +323,7 @@ for sched in it.permutations(octagon):
     for err in tricky_errors:
         new_err = [sched[q] for q in err]
         bin_err = convert_to_binary(new_err)
-        syn = tuple(error_to_syndrome(bin_err))
+        syn = tuple(error_to_syndrome(bin_err, 0))
         if syn not in new_lookuptable:
             new_lookuptable[syn] = bin_err
         else:
@@ -290,10 +337,171 @@ for sched in it.permutations(octagon):
 
 print index
 print len(good_schedules)
-print good_schedules[0]
-print good_schedules[-1]
-sys.exit(0)
+#print good_schedules[0]
+#print good_schedules[-1]
+
+
+# Now we add the events where an error propagates and triggers the flag
+# and another error occurs somewhere on the data qubits.  At this point
+# we're assuming that all the other stabilizers are measured with a 
+# 4-qubit cat state and no w-2 or higher errors propagate.
+
+
+tricky_errors2 = errors_0 + errors_1
+
 '''
+tricky_errors3 = [
+                    [0],
+                    [0,1],
+                    [0,1,2],
+                    [0,1,2,3],
+                    [5,6,7],
+                    [6,7],
+                    [7]
+                 ]
+'''
+tricky_errors3 = [
+                    [0,1],
+                    [0,1,2],
+                    [0,1,2,3],
+                    [5,6,7],
+                    [6,7]
+                 ]
+
+
+good_schedules2 = []
+for sched in good_schedules:
+    sched = list(sched)
+    new_lookuptable = dict(lookuptable)
+    log_parity2 = 0
+    log_parity3 = 0
+
+    # first we add the errors we had already obtained
+    # These don't trigger the octagon flag cause they can
+    # be caused by an ancilla error + meas error.
+    for err in tricky_errors:
+        new_err = [sched[q] for q in err]
+        bin_err = convert_to_binary(new_err)
+        syn = tuple(error_to_syndrome(bin_err, 0))
+        if syn not in new_lookuptable:
+            new_lookuptable[syn] = bin_err
+
+    
+    # now we add the errors the trigger the octagon flag, but
+    # don't prapagate anything to the data.
+    for err in tricky_errors2:
+        bin_err = convert_to_binary(err)
+        syn = tuple(error_to_syndrome(bin_err, 1))
+        if syn not in new_lookuptable:
+            new_lookuptable[syn] = bin_err
+        else:
+            after_corr, num_corr = correct_until_in_codespace(bin_err, new_lookuptable, 0, 1)
+            log_parity2 = overlapping_parity(after_corr, tuple(convert_to_binary(logical_oper)))
+            if log_parity2 == 1:
+                #print 'Parity 2 problem'
+                break
+
+    # now we add the errors that trigger the octagon flag and
+    # do propagate errors to the data.
+    for err in tricky_errors3:
+        new_err = [sched[q] for q in err]
+        bin_err = convert_to_binary(new_err)
+        for err2 in tricky_errors2:
+            bin_err2 = convert_to_binary(err2)
+            comb_err = list(multiply_operators(bin_err, bin_err2))
+
+            syn = tuple(error_to_syndrome(comb_err, 1))
+            if syn not in new_lookuptable:
+                new_lookuptable[syn] = comb_err
+            else:
+                after_corr, num_corr = correct_until_in_codespace(comb_err, 
+                                                                  new_lookuptable,
+                                                                  0, 1)
+                log_parity3 = overlapping_parity(after_corr, 
+                                                 tuple(convert_to_binary(logical_oper)))
+                if log_parity3 == 1:
+                    break
+        
+        if log_parity3 == 1:
+            break
+
+    if log_parity2 == 0 and log_parity3 == 0:
+        good_schedules2 += [sched]
+
+        #log_parity4 = 0
+        #tricky_errors4 = [[0], [7]]
+        #for err in tricky_errors4:
+        #    new_err = [sched[q] for q in err]
+        #    bin_err = convert_to_binary(new_err)
+        #    for err2 in tricky_errors2:
+        #        bin_err2 = convert_to_binary(err2)
+        #        comb_err = list(multiply_operators(bin_err, bin_err2))
+
+        #        syn = tuple(error_to_syndrome(comb_err, 1))
+        #        if syn not in new_lookuptable:
+        #            new_lookuptable[syn] = comb_err
+        #        else:
+        #            after_corr, num_corr = correct_until_in_codespace(comb_err, 
+        #                                                              new_lookuptable,
+        #                                                              0, 1)
+        #            log_parity4 = overlapping_parity(after_corr, 
+        #                                             tuple(convert_to_binary(logical_oper)))
+        #            if log_parity4 == 1:
+        #                print 'schedule =', sched
+        #                print 'new error =', new_err
+        #                print 'error 2 = ', err2
+        #                print 'comb error =', comb_err
+        #                print 'syndrome = ', syn
+        #                print 'interpretation =', new_lookuptable[syn]
+        #                sys.exit(0)
+        
+        
+        red_stabs = [stabs[5], stabs[1], stabs[3]]
+        red_stabs = [stabs[-1]]
+
+        good_schedules_red1 = []
+        log_parity_red1 = 0
+        for sched_red1 in it.permutations(red_stabs[0]):
+            sched_red1 = list(sched_red1)
+            new_err = [sched_red1[0], sched_red1[1]]
+            bin_err = convert_to_binary(new_err)
+
+            for err2 in tricky_errors2:
+                bin_err2 = convert_to_binary(err2)
+                comb_err = list(multiply_operators(bin_err, bin_err2))
+
+                syn = tuple(error_to_syndrome(comb_err, 0))
+                if syn not in new_lookuptable:
+                    new_lookuptable[syn] = comb_err
+                else:
+                    after_corr, num_corr = correct_until_in_codespace(comb_err, 
+                                                                      new_lookuptable,
+                                                                      0, 0)
+                    log_parity_red1 = overlapping_parity(after_corr, 
+                                                         tuple(convert_to_binary(logical_oper)))
+                    if log_parity_red1 == 1:
+                        break
+        
+            if log_parity_red1 == 1:
+                break
+    
+            if log_parity_red1 == 0:
+                good_schedules_red1 += [sched, sched_red1]
+
+
+print len(good_schedules2)
+print len(good_schedules_red1)
+
+sys.exit(0)
+                
+
+
+
+
+
+
+
+
 
 new_lookuptable = dict(lookuptable)
 log_parity = 0
