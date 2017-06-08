@@ -322,7 +322,7 @@ def hook_and_flag(sched_flags, err_locs, flag='f1', n_total=17):
     total_hook_bin = [0 for i in range(n_total)]
     trigger = 0
     for err_loc in err_locs:
-        local_hook_flags = sched_flags[err_loc]
+        local_hook_flags = sched_flags[err_loc:]
         if local_hook_flags.count(flag)%2==1 or sched_flags[err_loc]==meas:
             trigger += 1
         local_hook = [q for q in local_hook_flags if type(q)==type(0)]
@@ -330,7 +330,7 @@ def hook_and_flag(sched_flags, err_locs, flag='f1', n_total=17):
         total_hook_bin = sched_fun.multiply_operators(total_hook_bin, 
                                                       local_hook_bin)
 
-    return trigger, total_hook_bin
+    return trigger%2, total_hook_bin
 
 
 
@@ -357,11 +357,53 @@ def all_hooks(sched_flags, flags=['f1'], err_weight=1, n_total=17):
             triggers += [trigger]
         # for a given error location, the hook will always be the same;
         # only the triggering pattern will change.
-        dict_hooks[tuple(triggers)] += [hook]
+        if hook not in dict_hooks[tuple(triggers)]:
+            dict_hooks[tuple(triggers)]+= [hook]
 
     return dict_hooks
 
 
 
-def hooks_w2(sched_flags, flags=['f1'])
+def all_lookups_one_schedule(sched_bare, flags=[[1,3]]):
+    '''
+    '''
 
+    # First we add the flags to the schedule
+    sched_flags = sched_bare[:]
+    for i in range(len(flags)):
+        flag_name = 'f' + str(i+1)
+        meas_name = 'm' + str(i+1)
+        flag_qs = [sched_bare[j] for j in flags[i]]
+        for q in flag_qs:
+            anc_index = sched_flags.index(q)
+            sched_flags.insert(anc_index, flag_name)
+        sched_flags += [meas_name]
+
+    # Now we define the dictionary of lookup tables.
+    # There's one lookup table for each flag combination
+    lookups = {}
+    for prod in it.product([0,1], repeat=len(flags)):
+        err_weight = sum(prod)
+        if err_weight == 0:
+            lookups[prod] = dict(dict_noflag)
+        elif err_weight == 1:
+            lookups[prod] = dict(basic_lookup)
+        elif err_weight == 2:
+            lookups[prod] = dict(trivial_lookup)
+
+    flag_names = ['f'+str(i+1) for i in len(flags)]
+    for err_weight in [1,2]:
+        dict_hooks = all_hooks(sched_flags, flag_names, err_weight)
+
+    
+
+
+look = all_lookups_one_schedule([2,3,5,6,9,10,13,14], [[1,3], [4,6]])
+sys.exit(0)
+
+sched = [0,'f1',1,2,'f1',3,'m1']
+di = all_hooks(sched, ['f1'], 2)
+for key in di:
+    print key
+    for ho in di[key]:
+        print ho
