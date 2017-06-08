@@ -364,7 +364,7 @@ def all_hooks(sched_flags, flags=['f1'], err_weight=1, n_total=17):
 
 
 
-def all_lookups_one_schedule(sched_bare, flags=[[1,3]]):
+def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=d5_stabs[:]):
     '''
     '''
 
@@ -391,14 +391,37 @@ def all_lookups_one_schedule(sched_bare, flags=[[1,3]]):
         elif err_weight == 2:
             lookups[prod] = dict(trivial_lookup)
 
-    flag_names = ['f'+str(i+1) for i in len(flags)]
+    flag_names = ['f'+str(i+1) for i in range(len(flags))]
     for err_weight in [1,2]:
         dict_hooks = all_hooks(sched_flags, flag_names, err_weight)
+        for trig_comb in dict_hooks:
+            for hook in dict_hooks[trig_comb]:
+                syn = tuple(sched_fun.error_to_syndrome(hook[:], n_total, stabs[:]))
+                if syn not in lookups[trig_comb].keys():
+                    lookups[trig_comb][syn] = hook
+                else:
+                    after_corr, num_corr = sched_fun.correct_until_in_codespace(
+                                                            hook[:],
+                                                            lookups[trig_comb],
+                                                            n_total,
+                                                            stabs[:])
+                    log_parity = sched_fun.overlapping_parity(after_corr, 
+                                                              tuple(log_bin))
+                    if log_parity == 1:
+                        return False, {}
+                    
+    return True, lookups
 
-    
 
 
-look = all_lookups_one_schedule([2,3,5,6,9,10,13,14], [[1,3], [4,6]])
+#look = all_lookups_one_schedule([2,3,5,6,9,10,13,14], [[1,3], [4,6]])
+exists, lookups = all_lookups_one_schedule([0,1,2,3], [[1,3]])
+for trig in lookups:
+    print trig
+    print len(lookups[trig])
+for syn in lookups[(1,)]:
+    if syn not in basic_lookup:
+        print lookups[(1,)][syn]
 sys.exit(0)
 
 sched = [0,'f1',1,2,'f1',3,'m1']
