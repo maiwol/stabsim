@@ -87,18 +87,13 @@ def basic_dict1(sched, flags=[1,3], n_total=17, stabs=d5_stabs[:],
     dict1 = dict(basic_lookup)
     for extra_error in extra_errors:
         extra_bin = sched_fun.convert_to_binary(extra_error, n_total)
-        syn = tuple(sched_fun.error_to_syndrome(extra_bin, n_total, stabs[:]))
-        if syn not in dict1:
+        in_dict, log_par, syn = sched_fun.can_correct(extra_bin[:], dict1, 
+                                                      n_total, stabs[:])
+        if not in_dict:
             dict1[syn] = extra_bin
         else:
-            after_corr, num_corr = sched_fun.correct_until_in_codespace(extra_bin,
-                                                                        dict1,
-                                                                        n_total,
-                                                                        stabs[:])
-            log_parity = sched_fun.overlapping_parity(after_corr, tuple(log_bin))
-            if log_parity == 1:
-                return False, {}
-        
+            if log_par == 1:
+                return False, {} 
 
     for i in range(flags[0], flags[1]+1):
         hook = sched[i : ]
@@ -106,18 +101,14 @@ def basic_dict1(sched, flags=[1,3], n_total=17, stabs=d5_stabs[:],
         for err in errors_0 + errors_1 + extra_errors:
             err_bin = sched_fun.convert_to_binary(err, n_total)
             comb_err = sched_fun.multiply_operators(hook_bin, err_bin)
-            syn = tuple(sched_fun.error_to_syndrome(comb_err, n_total, stabs[:]))
-            if syn not in dict1:
+            in_dict, log_par, syn = sched_fun.can_correct(comb_err[:], dict1,
+                                                          n_total, stabs[:])
+            if not in_dict:
                 dict1[syn] = comb_err
             else:
-                after_corr, num_corr = sched_fun.correct_until_in_codespace(comb_err,
-                                                                            dict1,
-                                                                            n_total,
-                                                                            stabs[:])
-                log_parity = sched_fun.overlapping_parity(after_corr, tuple(log_bin))
-                if log_parity == 1:
-                    return False, {}
-    
+                if log_par == 1:
+                    return False, {} 
+            
     return True, dict1
 
 
@@ -137,17 +128,13 @@ def basic_dict2(sched1, flags1, sched2, flags2, n_total=17, stabs=d5_stabs[:]):
         for i in range(flags[0], flags[1]+1):
             hook = combo[0][i : ]
             hook_bin = sched_fun.convert_to_binary(hook, n_total)
-            syn = tuple(sched_fun.error_to_syndrome(hook_bin, n_total, stabs[:]))
-            if syn not in dict2:
+            in_dict, log_par, syn = sched_fun.can_correct(hook_bin[:], dict2, 
+                                                          n_total, stabs[:])
+            if not in_dict:
                 dict2[syn] = hook_bin
             else:
-                after_corr, num_corr = sched_fun.correct_until_in_codespace(hook_bin,
-                                                                            dict2,
-                                                                            n_total,
-                                                                            stabs[:])
-                log_parity = sched_fun.overlapping_parity(after_corr, tuple(log_bin))
-                if log_parity == 1:
-                    return False, {}
+                if log_par == 1:
+                    return False, {} 
     
     # (hook)1 (hook)2
     for i in range(flags1[0], flags1[1]+1):
@@ -157,17 +144,13 @@ def basic_dict2(sched1, flags1, sched2, flags2, n_total=17, stabs=d5_stabs[:]):
             hook2 = sched2[j : ]
             hook2_bin = sched_fun.convert_to_binary(hook2, n_total)
             comb_err = sched_fun.multiply_operators(hook1_bin, hook2_bin)
-            syn = tuple(sched_fun.error_to_syndrome(comb_err, n_total, stabs[:]))
-            if syn not in dict2:
+            in_dict, log_par, syn = sched_fun.can_correct(comb_err[:], dict2, 
+                                                          n_total, stabs[:])
+            if not in_dict:
                 dict2[syn] = comb_err
             else:
-                after_corr, num_corr = sched_fun.correct_until_in_codespace(comb_err,
-                                                                            dict2,
-                                                                            n_total,
-                                                                            stabs[:])
-                log_parity = sched_fun.overlapping_parity(after_corr, tuple(log_bin))
-                if log_parity == 1:
-                    return False, {}
+                if log_par == 1:
+                    return False, {} 
 
     return True, dict2
 
@@ -376,8 +359,11 @@ def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=d5_sta
         flag_qs = [sched_bare[j] for j in flags[i]]
         for q in flag_qs:
             anc_index = sched_flags.index(q)
+            if type(sched_flags[anc_index-1]) == type(''):
+                anc_index -= 1
             sched_flags.insert(anc_index, flag_name)
         sched_flags += [meas_name]
+
 
     # Now we define the dictionary of lookup tables.
     # There's one lookup table for each flag combination
@@ -388,45 +374,106 @@ def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=d5_sta
             lookups[prod] = dict(dict_noflag)
         elif err_weight == 1:
             lookups[prod] = dict(basic_lookup)
-        elif err_weight == 2:
+        elif err_weight > 1:
             lookups[prod] = dict(trivial_lookup)
 
     flag_names = ['f'+str(i+1) for i in range(len(flags))]
-    for err_weight in [1,2]:
-        dict_hooks = all_hooks(sched_flags, flag_names, err_weight)
-        for trig_comb in dict_hooks:
-            for hook in dict_hooks[trig_comb]:
-                syn = tuple(sched_fun.error_to_syndrome(hook[:], n_total, stabs[:]))
-                if syn not in lookups[trig_comb].keys():
-                    lookups[trig_comb][syn] = hook
+    
+    
+    # First we deal with the cases where we only had 1 error
+    # on the ancilla
+    dict_hooks = all_hooks(sched_flags, flag_names, 1)
+    for trig_comb in dict_hooks:
+        for hook in dict_hooks[trig_comb]:
+            # for each hook we add all the possible w-1
+            # errors on the data
+            for data_err in errors_0 + errors_1:
+                #print data_err
+                data_err_bin = sched_fun.convert_to_binary(data_err, n_total)
+                comb_err = sched_fun.multiply_operators(hook[:], data_err_bin[:])
+                in_dict, log_par, syn = sched_fun.can_correct(comb_err[:],
+                                                              lookups[trig_comb],
+                                                              n_total,
+                                                              stabs[:])
+                if not in_dict:
+                    lookups[trig_comb][syn] = comb_err[:]
                 else:
-                    after_corr, num_corr = sched_fun.correct_until_in_codespace(
-                                                            hook[:],
-                                                            lookups[trig_comb],
-                                                            n_total,
-                                                            stabs[:])
-                    log_parity = sched_fun.overlapping_parity(after_corr, 
-                                                              tuple(log_bin))
-                    if log_parity == 1:
+                    if log_par == 1:
                         return False, {}
-                    
+
+
+    # Secondly we deal with the cases where we had 2 errors
+    # on the ancilla
+    dict_hooks = all_hooks(sched_flags, flag_names, 2)
+    for trig_comb in dict_hooks:
+        for hook in dict_hooks[trig_comb]:
+            in_dict, log_par, syn = sched_fun.can_correct(hook[:],
+                                                          lookups[trig_comb],
+                                                          n_total,
+                                                          stabs[:])
+            if not in_dict:
+                lookups[trig_comb][syn] = hook[:]
+            else:
+                if log_par == 1:
+                    return False, {}
+               
     return True, lookups
 
 
 
 #look = all_lookups_one_schedule([2,3,5,6,9,10,13,14], [[1,3], [4,6]])
-exists, lookups = all_lookups_one_schedule([0,1,2,3], [[1,3]])
-for trig in lookups:
-    print trig
-    print len(lookups[trig])
-for syn in lookups[(1,)]:
-    if syn not in basic_lookup:
-        print lookups[(1,)][syn]
-sys.exit(0)
+#exists, lookups = all_lookups_one_schedule([0,1,2,3], [[1,3]])
+#print exists
+#if exists:
+#    print len(dict_noflag)
+#    print len(basic_lookup)
+#    for trig in lookups:
+#        print trig
+#        print len(lookups[trig])
+#for syn in lookups[(1,)]:
+#    if syn not in basic_lookup:
+#        print lookups[(1,)][syn]
 
-sched = [0,'f1',1,2,'f1',3,'m1']
-di = all_hooks(sched, ['f1'], 2)
-for key in di:
-    print key
-    for ho in di[key]:
-        print ho
+index=0
+octagon = d5_stabs[0][:]
+flags_combos = []
+for comb1 in it.combinations(range(8), 2):
+    print comb1
+    for comb2 in it.combinations(range(8), 2):
+        print comb2
+        flags = [list(comb1), list(comb2)]
+        print flags
+        flags_combos += [flags]
+        #print all_lookups_one_schedule(octagon[:], flags)
+        i+=1
+print i
+
+
+
+
+exists, lookups = all_lookups_one_schedule(octagon[:], [[0,1],[1,2],[2,3],[3,4],[4,5],
+                                            [5,6],[6,7]])
+print exists
+
+
+for flags in flags_combos:
+    print flags
+    flags_str = '_'.join(map(str,[q for flag in flags for q in flag]))
+    outfile_name = 'schedules_octagon_%s.json' %flags_str
+
+    good_schedules = []
+    for perm in it.permutations(range(8)):
+        sched = [octagon[i] for i in perm]    
+        exists, lookups = all_lookups_one_schedule(sched, flags)
+        if exists:
+            good_schedules += [sched]
+
+    sched_dict = {}
+    for i in range(len(good_schedules)):
+        sched_dict[i] = good_schedules[i]
+    outfile_name = 'schedules_octagon_%s.json' %flags_str
+    outfile = open(outfile_name, 'w')
+    json.dump(sched_dict, outfile, indent=4, separators=(',', ':'),
+              sort_keys=True)
+    outfile.close()
+    print 'good schedules octagon =', len(good_schedules)
