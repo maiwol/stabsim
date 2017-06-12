@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import json
 import itertools as it
+import multiprocessing as mp
 import schedule_functions as sched_fun
 
 
@@ -421,6 +422,18 @@ def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=d5_sta
 
 
 
+def merge_two_lookups_dicts(old_lookups, old_scheds_flags, new_lookups, 
+                            new_scheds_flags):
+    '''
+    '''
+
+    updated_lookups = {}
+    for trig_comb in old_lookups:
+        trig_comb_w = sched_fun.total_trig_comb_w(trig_comb)
+        if trig_comb_w < 2:
+            
+
+
 #look = all_lookups_one_schedule([2,3,5,6,9,10,13,14], [[1,3], [4,6]])
 #exists, lookups = all_lookups_one_schedule([0,1,2,3], [[1,3]])
 #print exists
@@ -434,30 +447,11 @@ def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=d5_sta
 #    if syn not in basic_lookup:
 #        print lookups[(1,)][syn]
 
-index=0
-octagon = d5_stabs[0][:]
-flags_combos = []
-for comb1 in it.combinations(range(8), 2):
-    print comb1
-    for comb2 in it.combinations(range(8), 2):
-        print comb2
-        flags = [list(comb1), list(comb2)]
-        print flags
-        flags_combos += [flags]
-        #print all_lookups_one_schedule(octagon[:], flags)
-        i+=1
-print i
 
-
-
-
-exists, lookups = all_lookups_one_schedule(octagon[:], [[0,1],[1,2],[2,3],[3,4],[4,5],
-                                            [5,6],[6,7]])
-print exists
-
-
-for flags in flags_combos:
-    print flags
+def try_all_schedules_octagon(flags): 
+    '''
+    '''
+    
     flags_str = '_'.join(map(str,[q for flag in flags for q in flag]))
     outfile_name = 'schedules_octagon_%s.json' %flags_str
 
@@ -476,4 +470,56 @@ for flags in flags_combos:
     json.dump(sched_dict, outfile, indent=4, separators=(',', ':'),
               sort_keys=True)
     outfile.close()
-    print 'good schedules octagon =', len(good_schedules)
+    #print 'good schedules octagon =', len(good_schedules)
+
+    return len(good_schedules)
+
+
+def try_all_schedules_octagon_several_flags(flags_combos):
+    n_good = 0
+    for flags in flags_combos:
+        n_good += try_all_schedules_octagon(flags)
+    
+    return n_good
+
+
+n_flags=0
+octagon = d5_stabs[0][:]
+flags_combos = []
+for comb1 in it.combinations(range(8), 2):
+    #print comb1
+    if comb1[0] == 0 and comb1[1] < 6:  continue
+    for comb2 in it.combinations(range(8), 2):
+        #print comb2
+        flags = [list(comb1), list(comb2)]
+        #print flags
+        flags_combos += [flags]
+        n_flags+=1
+        #print all_lookups_one_schedule(octagon[:], flags)
+print n_flags
+
+n_proc = 4
+n_per_group = n_flags/4
+print n_per_group
+flags_combos_div = [flags_combos[i*n_per_group:(i+1)*n_per_group] for i in range(n_proc)]
+#flags_combos_div = [flags_combos[i*n_per_group:i*n_per_group+2] for i in range(n_proc)]
+#print flags_combos_div[0]
+
+pool = mp.Pool(n_proc)
+results = [pool.apply_async(try_all_schedules_octagon_several_flags, (flags_combos_div[i],))
+            for i in range(n_proc)]
+pool.close()
+pool.join()
+n_good_results = [r.get() for r in results]
+print n_good_results
+
+# Just to make sure that it works if we have 7 flags
+# It does work!
+#exists, lookups = all_lookups_one_schedule(octagon[:], [[0,1],[1,2],[2,3],[3,4],[4,5],
+#                                            [5,6],[6,7]])
+#print exists
+
+
+
+
+   
