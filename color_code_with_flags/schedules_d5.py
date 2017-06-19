@@ -422,16 +422,68 @@ def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=d5_sta
 
 
 
+def add_two_lookups(trig_comb1, lookup1, trig_comb2, lookup2):
+    '''
+    '''
+    w1 = sched_fun.total_trig_comb_w(trig_comb1)
+    w2 = sched_fun.total_trig_comb_w(trig_comb2)
+    total_w = w1 + w2
+    if total_w > 2:
+        raise ValueError('The total weight cannot be larger than 2.')
+    elif total_w == 2:
+        return True, {}
+    elif total_w == 1:
+        if w1 == 1:  
+            return True, dict(lookup1)
+        else:        
+            return True, dict(lookup2)
+    elif total_w == 0:
+        comb_lookup = dict(lookup1)
+        for syn in lookup2:
+            if syn not in comb_lookup:
+                comb_lookup[syn] = lookup2[syn]
+            else:
+                err1 = comb_lookup[syn]
+                err2 = lookup2[syn]
+                total_err = sched_fun.multiply_operators(err1, err2)
+                log_parity = sched_fun.overlapping_parity(total_err, 
+                                                          tuple(log_bin))
+                if log_parity == 1:  
+                    return False, None
+        
+        return True, comb_lookup 
+
+        
+
 def merge_two_lookups_dicts(old_lookups, old_scheds_flags, new_lookups, 
                             new_scheds_flags):
     '''
     '''
 
     updated_lookups = {}
-    for trig_comb in old_lookups:
-        trig_comb_w = sched_fun.total_trig_comb_w(trig_comb)
-        if trig_comb_w < 2:
-            
+    for trig_comb_old in old_lookups:
+        trig_comb_old_w = sched_fun.total_trig_comb_w(trig_comb_old)
+        if trig_comb_old_w < 2:
+            for trig_comb_new in new_lookups:
+                trig_comb_up = trig_comb_old + trig_comb_new
+                updated_lookups[trig_comb_up] = 'nothing'
+
+        else:
+            # if the weight of the triggering combination is already 2,
+            # then we just add a 0 and keep the same dictionary.
+            trig_comb_up = trig_comb_old + (0,)
+            updated_lookups[trig_comb_up] = old_lookups[trig_comb_old]
+
+    return updated_lookups
+
+
+old_lookups = {((0,0),): 'nothing', ((0,1),): 'nothing', ((1,0),): 'nothing', ((1,1),): 'nothing'}
+new_lookups = {(0,): 'nothing', (1,): 'nothing'}
+up1 = merge_two_lookups_dicts(old_lookups, [], new_lookups, [])
+for key in up1:  print key
+up2 = merge_two_lookups_dicts(up1, [], new_lookups, [])
+for key in up2:  print key
+sys.exit(0)
 
 
 #look = all_lookups_one_schedule([2,3,5,6,9,10,13,14], [[1,3], [4,6]])
