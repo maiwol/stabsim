@@ -687,10 +687,42 @@ for comb_trig in old_lookups_oct:
 
 flags_sq = [[1,3]]
 sched_sq = d5_stabs[1][:]
-exists_sq, lookups_sq = all_lookups_one_schedule(sched_sq, flags_sq)
+#exists_sq, lookups_sq = all_lookups_one_schedule(sched_sq, flags_sq)
 
-exist, lo = merge_two_lookups_dicts(lookups_oct, [sched_oct], [flags_oct], 
-                                    lookups_sq, sched_sq, flags_sq)
+#exist, lo = merge_two_lookups_dicts(lookups_oct, [sched_oct], [flags_oct], 
+#                                    lookups_sq, sched_sq, flags_sq)
+#print lo.keys()
+
+def add_extra_sched(old_lookups, old_scheds, old_flags, new_sched, new_flags,
+                    n_total=17, stabs=d5_stabs[:]):
+    '''
+    '''
+    
+    # First we compute the dict1 for the new schedule
+    exist1, new_lookups = all_lookups_one_schedule(new_sched, new_flags,
+                                                   n_total, stabs)
+    if not exist1:  return False, {}, [] 
+
+    # Then we compute the dict2
+    exist2, updated_lookups = merge_two_lookups_dicts(old_lookups, old_scheds,
+                                                      old_flags, new_lookups,
+                                                      new_sched, new_flags,
+                                                      n_total, stabs)
+    if not exist2:  return False, {}, []
+
+    updated_scheds = old_scheds + [new_sched]
+    return True, updated_lookups, updated_scheds
+
+
+exist, lo = add_extra_sched(lookups_oct, [sched_oct], [flags_oct],
+                            sched_sq, flags_sq)
+print exist
 print lo.keys()
 
+def next_good_sched(list_good_scheds, flags_good, stabn, flagsn,
+                    n_total=17, stabs=d5_stabs[:], perms_important=[],
+                    extra_errors=[]):
+    '''
+    '''
 
+    
