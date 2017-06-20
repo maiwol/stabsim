@@ -155,9 +155,31 @@ def total_trig_comb_w(trig_comb):
 
     w = 0
     for trig in trig_comb:
-        if type(trig) == type((0,)) and trig.count(1) > 0:
-            w += 1
+        if type(trig) == type((0,)):
+            if trig.count(1) > 0:
+                w += 1
         else:
             w += trig
 
     return w
+
+
+
+def add_flags_to_sched(sched_bare, flags=[[1,3]]):
+    '''
+    adds the flags to a bare schedule and returns
+    the schedule with flags
+    '''
+    sched_flags = sched_bare[:]
+    for i in range(len(flags)):
+        flag_name = 'f' + str(i+1)
+        meas_name = 'm' + str(i+1)
+        flag_qs = [sched_bare[j] for j in flags[i]]
+        for q in flag_qs:
+            anc_index = sched_flags.index(q)
+            if type(sched_flags[anc_index-1]) == type(''):
+                anc_index -= 1
+            sched_flags.insert(anc_index, flag_name)
+        sched_flags += [meas_name]
+
+    return sched_flags

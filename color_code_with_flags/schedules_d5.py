@@ -353,18 +353,7 @@ def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=d5_sta
     '''
 
     # First we add the flags to the schedule
-    sched_flags = sched_bare[:]
-    for i in range(len(flags)):
-        flag_name = 'f' + str(i+1)
-        meas_name = 'm' + str(i+1)
-        flag_qs = [sched_bare[j] for j in flags[i]]
-        for q in flag_qs:
-            anc_index = sched_flags.index(q)
-            if type(sched_flags[anc_index-1]) == type(''):
-                anc_index -= 1
-            sched_flags.insert(anc_index, flag_name)
-        sched_flags += [meas_name]
-
+    sched_flags = sched_fun.add_flags_to_sched(sched_bare, flags)
 
     # Now we define the dictionary of lookup tables.
     # There's one lookup table for each flag combination
@@ -422,7 +411,8 @@ def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=d5_sta
 
 
 
-def add_two_lookups(trig_comb1, lookup1, trig_comb2, lookup2):
+def add_two_lookups(trig_comb1, lookup1, trig_comb2, lookup2,
+                    n_total, stabs):
     '''
     '''
     w1 = sched_fun.total_trig_comb_w(trig_comb1)
@@ -446,27 +436,51 @@ def add_two_lookups(trig_comb1, lookup1, trig_comb2, lookup2):
                 err1 = comb_lookup[syn]
                 err2 = lookup2[syn]
                 total_err = sched_fun.multiply_operators(err1, err2)
-                log_parity = sched_fun.overlapping_parity(total_err, 
-                                                          tuple(log_bin))
-                if log_parity == 1:  
-                    return False, None
-        
+                total_syn = sched_fun.error_to_syndrome(total_err,
+                                                        n_total,
+                                                        stabs)
+                if total_syn.count(1) == 0:
+                    log_parity = sched_fun.overlapping_parity(total_err, 
+                                                              tuple(log_bin))
+                    if log_parity == 1:  
+                        return False, None
+                else:
+                    raise ValueError('The total correction does not take me to the CS.')
+
         return True, comb_lookup 
 
         
 
-def merge_two_lookups_dicts(old_lookups, old_scheds_flags, new_lookups, 
-                            new_scheds_flags):
+def merge_two_lookups_dicts(old_lookups, old_scheds, old_flags, new_lookups, 
+                            new_sched, new_flags, n_total=17, stabs=d5_stabs[:]):
     '''
     '''
+
+    #print old_scheds
+    #print old_flags
+    #print new_sched
+    #print new_flags
+    #sys.exit(0)
+
 
     updated_lookups = {}
     for trig_comb_old in old_lookups:
         trig_comb_old_w = sched_fun.total_trig_comb_w(trig_comb_old)
         if trig_comb_old_w < 2:
             for trig_comb_new in new_lookups:
+                #print 'old =', trig_comb_old
+                #print 'new =', trig_comb_new
                 trig_comb_up = trig_comb_old + trig_comb_new
-                updated_lookups[trig_comb_up] = 'nothing'
+                #print 'updated =', trig_comb_up
+                exist1, comb_lookup = add_two_lookups(trig_comb_old,
+                                                      old_lookups[trig_comb_old],
+                                                      trig_comb_new,
+                                                      new_lookups[trig_comb_new],
+                                                      n_total, stabs)
+                #print exist1, len(comb_lookup)
+                
+                if not exist1:  return False, None
+                updated_lookups[trig_comb_up] = comb_lookup
 
         else:
             # if the weight of the triggering combination is already 2,
@@ -474,9 +488,88 @@ def merge_two_lookups_dicts(old_lookups, old_scheds_flags, new_lookups,
             trig_comb_up = trig_comb_old + (0,)
             updated_lookups[trig_comb_up] = old_lookups[trig_comb_old]
 
-    return updated_lookups
+    
+    for old_sched_i in range(len(old_scheds)):
+        exist2, updated_lookups = add_dicts2(updated_lookups, 
+                                             old_sched_i,
+                                             old_scheds[old_sched_i],
+                                             old_flags[old_sched_i],
+                                             new_sched, 
+                                             new_flags,
+                                             n_total,
+                                             stabs)
+        if not exist2:  return False, None
+
+    return True, updated_lookups
 
 
+
+
+def add_dicts2(updated_lookups, old_sched_index, old_sched, old_flags,
+               new_sched, new_flags, n_total=17, stabs=d5_stabs[:]):
+    '''
+    '''
+    updated_lookups = dict(updated_lookups)
+    total_stabs_so_far = len(updated_lookups.keys()[0])
+    total_trig_basic = [0 for i in range(total_stabs_so_far-1)]
+
+    #print updated_lookups.keys()
+    #print old_sched_index
+    #print old_sched
+    #print old_flags
+    #print new_sched
+    #print new_flags
+
+    # First we create the flagged schedules and the flag names
+    old_flag_names = ['f'+str(i+1) for i in range(len(old_flags))]
+    new_flag_names = ['f'+str(i+1) for i in range(len(new_flags))]
+    old_sched_flags = sched_fun.add_flags_to_sched(old_sched, old_flags)
+    new_sched_flags = sched_fun.add_flags_to_sched(new_sched, new_flags)
+
+    #print old_flag_names
+    #print new_flag_names
+    #print old_sched_flags
+    #print new_sched_flags
+
+    # Now we generate every possible w-1 hook error on the old schedule
+    # and every possible w-1 hook error on the new schedule.
+    dict_hooks_old = all_hooks(old_sched_flags, old_flag_names, 1)
+    dict_hooks_new = all_hooks(new_sched_flags, new_flag_names, 1)
+    #print dict_hooks_old.keys()
+    #print dict_hooks_new.keys()
+    for trig_comb_old in dict_hooks_old:
+        for trig_comb_new in dict_hooks_new:
+            total_trig = total_trig_basic[:]
+            #print total_trig
+            total_trig[old_sched_index] = trig_comb_old
+            #print total_trig
+            total_trig += trig_comb_new
+            #print total_trig
+            total_trig = tuple(total_trig)
+            #print total_trig
+
+            for hook_old in dict_hooks_old[trig_comb_old]:
+                for hook_new in dict_hooks_new[trig_comb_new]:
+
+                    #print hook_old
+                    #print hook_new
+                    comb_hook = sched_fun.multiply_operators(hook_old[:], hook_new[:])
+                    #print comb_hook
+
+                    in_dict, log_par, syn = sched_fun.can_correct(comb_hook[:],
+                                                                  updated_lookups[total_trig],
+                                                                  n_total,
+                                                                  stabs[:])
+                    #print in_dict, log_par, syn
+                    if not in_dict:
+                        updated_lookups[total_trig][syn] = comb_hook[:]
+                    else:
+                        if log_par == 1:
+                            return False, {}
+
+    return True, updated_lookups
+
+'''
 old_lookups = {((0,0),): 'nothing', ((0,1),): 'nothing', ((1,0),): 'nothing', ((1,1),): 'nothing'}
 new_lookups = {(0,): 'nothing', (1,): 'nothing'}
 up1 = merge_two_lookups_dicts(old_lookups, [], new_lookups, [])
@@ -484,6 +577,7 @@ for key in up1:  print key
 up2 = merge_two_lookups_dicts(up1, [], new_lookups, [])
 for key in up2:  print key
 sys.exit(0)
+'''
 
 
 #look = all_lookups_one_schedule([2,3,5,6,9,10,13,14], [[1,3], [4,6]])
@@ -527,6 +621,9 @@ def try_all_schedules_octagon(flags):
     return len(good_schedules)
 
 
+
+
+
 def try_all_schedules_octagon_several_flags(flags_combos):
     n_good = 0
     for flags in flags_combos:
@@ -537,6 +634,8 @@ def try_all_schedules_octagon_several_flags(flags_combos):
 
 n_flags=0
 octagon = d5_stabs[0][:]
+
+'''
 flags_combos = []
 for comb1 in it.combinations(range(8), 2):
     #print comb1
@@ -549,6 +648,7 @@ for comb1 in it.combinations(range(8), 2):
         n_flags+=1
         #print all_lookups_one_schedule(octagon[:], flags)
 print n_flags
+
 
 n_proc = 4
 n_per_group = n_flags/4
@@ -570,8 +670,27 @@ print n_good_results
 #exists, lookups = all_lookups_one_schedule(octagon[:], [[0,1],[1,2],[2,3],[3,4],[4,5],
 #                                            [5,6],[6,7]])
 #print exists
+'''
 
 
+flags_oct = [[1,6], [2,7]]
+flags_str = '_'.join(map(str,[q for flag in flags_oct for q in flag]))
+octagon_filename = 'schedules_octagon_%s.json' %flags_str
+json_file = open(octagon_filename, 'r')
+json_dict = json.load(json_file)
+json_file.close()
+sched_oct = json_dict['0']
+exists_oct, old_lookups_oct = all_lookups_one_schedule(sched_oct, flags_oct)
+lookups_oct = {}
+for comb_trig in old_lookups_oct:
+    lookups_oct[(comb_trig,)] = old_lookups_oct[comb_trig]
+
+flags_sq = [[1,3]]
+sched_sq = d5_stabs[1][:]
+exists_sq, lookups_sq = all_lookups_one_schedule(sched_sq, flags_sq)
+
+exist, lo = merge_two_lookups_dicts(lookups_oct, [sched_oct], [flags_oct], 
+                                    lookups_sq, sched_sq, flags_sq)
+print lo.keys()
 
 
-   
