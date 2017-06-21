@@ -679,11 +679,19 @@ octagon_filename = 'schedules_octagon_%s.json' %flags_str
 json_file = open(octagon_filename, 'r')
 json_dict = json.load(json_file)
 json_file.close()
-sched_oct = json_dict['0']
-exists_oct, old_lookups_oct = all_lookups_one_schedule(sched_oct, flags_oct)
-lookups_oct = {}
-for comb_trig in old_lookups_oct:
-    lookups_oct[(comb_trig,)] = old_lookups_oct[comb_trig]
+#sched_oct = json_dict['0']
+n_scheds_oct = 10
+sched_oct_list = []
+lookups_oct_list = []
+for sched_oct in json_dict.values()[:n_scheds_oct]:
+    sched_oct_list += [[sched_oct]]
+    exists_oct, old_lookups_oct = all_lookups_one_schedule(sched_oct, flags_oct)
+    lookups_oct = {}
+    for comb_trig in old_lookups_oct:
+        lookups_oct[(comb_trig,)] = old_lookups_oct[comb_trig]
+    lookups_oct_list += [lookups_oct]
+
+
 
 flags_sq = [[1,3]]
 sched_sq = d5_stabs[1][:]
@@ -704,25 +712,76 @@ def add_extra_sched(old_lookups, old_scheds, old_flags, new_sched, new_flags,
     if not exist1:  return False, {}, [] 
 
     # Then we compute the dict2
+    #print old_scheds
+    #print type(old_lookups)
     exist2, updated_lookups = merge_two_lookups_dicts(old_lookups, old_scheds,
                                                       old_flags, new_lookups,
                                                       new_sched, new_flags,
                                                       n_total, stabs)
     if not exist2:  return False, {}, []
-
     updated_scheds = old_scheds + [new_sched]
+    
     return True, updated_lookups, updated_scheds
 
 
-exist, lo = add_extra_sched(lookups_oct, [sched_oct], [flags_oct],
-                            sched_sq, flags_sq)
-print exist
-print lo.keys()
 
-def next_good_sched(list_good_scheds, flags_good, stabn, flagsn,
-                    n_total=17, stabs=d5_stabs[:], perms_important=[],
-                    extra_errors=[]):
+def next_good_scheds(list_old_lookups, list_old_scheds, old_flags, new_stab, 
+                     new_flags, perms_important=[], n_total=17,
+                     stabs=d5_stabs[:]):
     '''
     '''
 
+    n_sched = len(list_old_scheds)
+    list_up_scheds, list_up_lookups = [], []
+
+    #print n_sched
+    #print len(perms_important)
+
+    for sched_i in range(n_sched):
+
+        for perm in perms_important:
+            new_sched = [new_stab[q] for q in perm]
+            #schedn = list(schedn)
+            #print perm
+            #print new_sched
+
+            exist, up_lookups, up_scheds = add_extra_sched(list_old_lookups[sched_i],
+                                                           list_old_scheds[sched_i],
+                                                           old_flags[:],
+                                                           new_sched,
+                                                           new_flags,
+                                                           n_total,
+                                                           stabs)
+            if exist:
+                list_up_lookups += [up_lookups]
+                list_up_scheds += [up_scheds]
+
+    return list_up_lookups, list_up_scheds
+
+
+
+perms_important_sq, perms_reversed_sq = [], []
+for perm in it.permutations(range(4)):
+    if perm not in perms_reversed_sq:
+        perms_important_sq += [perm]
+        perms_reversed_sq += [tuple(reversed(perm))]
+
+#print sched_oct_list
+list_up_lookups = lookups_oct_list[:]
+list_up_scheds = sched_oct_list[:]
+list_flags = [flags_oct]
+for color_stab in d5_stabs[1:3]:
+    list_up_lookups, list_up_scheds = next_good_scheds(list_up_lookups, list_up_scheds, 
+                                                       list_flags, color_stab, 
+                                                       flags_sq, perms_important_sq[:])
     
+    print list_up_lookups[0].keys()
+    
+    list_flags += [flags_sq]
+    print list_flags
+
+for sched in list_up_scheds:
+    print sched
+print len(list_up_scheds)
+print len(list_up_lookups)
+
