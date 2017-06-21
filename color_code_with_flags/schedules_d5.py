@@ -456,10 +456,10 @@ def merge_two_lookups_dicts(old_lookups, old_scheds, old_flags, new_lookups,
     '''
     '''
 
-    #print old_scheds
-    #print old_flags
-    #print new_sched
-    #print new_flags
+    #print 'old_scheds =', old_scheds
+    #print 'old flags =', old_flags
+    #print 'new sched =', new_sched
+    #print 'new flags =', new_flags
     #sys.exit(0)
 
 
@@ -512,13 +512,14 @@ def add_dicts2(updated_lookups, old_sched_index, old_sched, old_flags,
     updated_lookups = dict(updated_lookups)
     total_stabs_so_far = len(updated_lookups.keys()[0])
     total_trig_basic = [0 for i in range(total_stabs_so_far-1)]
+    total_trig_basic[0] = (0,0)
 
-    #print updated_lookups.keys()
-    #print old_sched_index
-    #print old_sched
-    #print old_flags
-    #print new_sched
-    #print new_flags
+    #print 'keys =', updated_lookups.keys()
+    #print 'old sched i =', old_sched_index
+    #print 'old sched =', old_sched
+    #print 'old flags =', old_flags
+    #print 'new sched =', new_sched
+    #print 'new flags =', new_flags
 
     # First we create the flagged schedules and the flag names
     old_flag_names = ['f'+str(i+1) for i in range(len(old_flags))]
@@ -528,25 +529,28 @@ def add_dicts2(updated_lookups, old_sched_index, old_sched, old_flags,
 
     #print old_flag_names
     #print new_flag_names
-    #print old_sched_flags
-    #print new_sched_flags
+    #print 'old sched flags =', old_sched_flags
+    #print 'new sched flags =', new_sched_flags
 
     # Now we generate every possible w-1 hook error on the old schedule
     # and every possible w-1 hook error on the new schedule.
     dict_hooks_old = all_hooks(old_sched_flags, old_flag_names, 1)
     dict_hooks_new = all_hooks(new_sched_flags, new_flag_names, 1)
-    #print dict_hooks_old.keys()
-    #print dict_hooks_new.keys()
+    #print 'dict hooks old keys =', dict_hooks_old.keys()
+    #print 'dict hooks new keys =', dict_hooks_new.keys()
     for trig_comb_old in dict_hooks_old:
         for trig_comb_new in dict_hooks_new:
             total_trig = total_trig_basic[:]
-            #print total_trig
-            total_trig[old_sched_index] = trig_comb_old
-            #print total_trig
+            #print 'total trig 1 =', total_trig
+            if old_sched_index == 0:
+                total_trig[old_sched_index] = trig_comb_old
+            else:
+                total_trig[old_sched_index] = trig_comb_old[0]
+            #print 'total trig 2 =', total_trig
             total_trig += trig_comb_new
-            #print total_trig
+            #print 'total trig 3 =', total_trig
             total_trig = tuple(total_trig)
-            #print total_trig
+            #print 'total trig 4 =', total_trig
 
             for hook_old in dict_hooks_old[trig_comb_old]:
                 for hook_new in dict_hooks_new[trig_comb_new]:
@@ -673,28 +677,6 @@ print n_good_results
 '''
 
 
-flags_oct = [[1,6], [2,7]]
-flags_str = '_'.join(map(str,[q for flag in flags_oct for q in flag]))
-octagon_filename = 'schedules_octagon_%s.json' %flags_str
-json_file = open(octagon_filename, 'r')
-json_dict = json.load(json_file)
-json_file.close()
-#sched_oct = json_dict['0']
-n_scheds_oct = 10
-sched_oct_list = []
-lookups_oct_list = []
-for sched_oct in json_dict.values()[:n_scheds_oct]:
-    sched_oct_list += [[sched_oct]]
-    exists_oct, old_lookups_oct = all_lookups_one_schedule(sched_oct, flags_oct)
-    lookups_oct = {}
-    for comb_trig in old_lookups_oct:
-        lookups_oct[(comb_trig,)] = old_lookups_oct[comb_trig]
-    lookups_oct_list += [lookups_oct]
-
-
-
-flags_sq = [[1,3]]
-sched_sq = d5_stabs[1][:]
 #exists_sq, lookups_sq = all_lookups_one_schedule(sched_sq, flags_sq)
 
 #exist, lo = merge_two_lookups_dicts(lookups_oct, [sched_oct], [flags_oct], 
@@ -734,10 +716,14 @@ def next_good_scheds(list_old_lookups, list_old_scheds, old_flags, new_stab,
     n_sched = len(list_old_scheds)
     list_up_scheds, list_up_lookups = [], []
 
-    #print n_sched
+    #print 'flags =', old_flags
+    #print 'n sched =', n_sched
+    #print 'n lookups =', len(list_old_lookups)
     #print len(perms_important)
 
     for sched_i in range(n_sched):
+
+        #print '%s out of %s old scheds' %(sched_i+1,n_sched)
 
         for perm in perms_important:
             new_sched = [new_stab[q] for q in perm]
@@ -760,28 +746,138 @@ def next_good_scheds(list_old_lookups, list_old_scheds, old_flags, new_stab,
 
 
 
+
+def do_first_n_stabs(list_up_scheds, list_flags, stabs_to_add,
+                     flags_sq, perms_important_sq, scheds_per_round):
+    '''
+    '''
+    
+    n_initial_scheds = len(list_up_scheds)
+    if n_initial_scheds%scheds_per_round != 0:
+        raise ValueError('The number of scheds per round is not factor.') 
+
+    n_rounds = n_initial_scheds/scheds_per_round
+    #division_lookups = [list_up_lookups[i*scheds_per_round:(i+1)*scheds_per_round]
+    #                    for i in range(n_rounds)]
+    division_scheds = [list_up_scheds[i*scheds_per_round:(i+1)*scheds_per_round]
+                        for i in range(n_rounds)]
+
+    #print n_rounds
+    #print scheds_per_round
+
+    updated_schedules = []
+    for i_round in range(n_rounds):    
+        local_flags = list_flags[:]        
+        #local_lookups = division_lookups[i_round]
+        local_lookups = []
+        local_scheds = division_scheds[i_round]
+        for sched_oct in local_scheds:
+            exists_oct, pre_local_lookup = all_lookups_one_schedule(sched_oct[0], local_flags[0])
+            local_lookup = {}
+            for comb_trig in pre_local_lookup:
+                local_lookup[(comb_trig,)] = pre_local_lookup[comb_trig]
+            local_lookups += [local_lookup]
+
+
+        for color_stab in stabs_to_add:
+            local_lookups, local_scheds = next_good_scheds(local_lookups,
+                                                           local_scheds, 
+                                                           local_flags, color_stab, 
+                                                           flags_sq, perms_important_sq[:])
+            local_flags += [flags_sq]
+
+        updated_schedules += local_scheds
+
+    return updated_schedules
+
+
+
+
+
+
+flags_oct = [[1,6], [2,7]]
+flags_str = '_'.join(map(str,[q for flag in flags_oct for q in flag]))
+octagon_filename = 'schedules_octagon_%s.json' %flags_str
+json_file = open(octagon_filename, 'r')
+json_dict = json.load(json_file)
+json_file.close()
+#sched_oct = json_dict['0']
+n_scheds_oct = len(json_dict)/20
+sched_oct_list = []
+#lookups_oct_list = []
+for sched_oct in json_dict.values()[:n_scheds_oct]:
+    sched_oct_list += [[sched_oct]]
+#    exists_oct, old_lookups_oct = all_lookups_one_schedule(sched_oct, flags_oct)
+#    lookups_oct = {}
+#    for comb_trig in old_lookups_oct:
+#        lookups_oct[(comb_trig,)] = old_lookups_oct[comb_trig]
+#    lookups_oct_list += [lookups_oct]
+
+flags_sq = [[1,3]]
+
 perms_important_sq, perms_reversed_sq = [], []
 for perm in it.permutations(range(4)):
     if perm not in perms_reversed_sq:
         perms_important_sq += [perm]
         perms_reversed_sq += [tuple(reversed(perm))]
 
-#print sched_oct_list
-list_up_lookups = lookups_oct_list[:]
-list_up_scheds = sched_oct_list[:]
-list_flags = [flags_oct]
-for color_stab in d5_stabs[1:3]:
-    list_up_lookups, list_up_scheds = next_good_scheds(list_up_lookups, list_up_scheds, 
-                                                       list_flags, color_stab, 
-                                                       flags_sq, perms_important_sq[:])
-    
-    print list_up_lookups[0].keys()
-    
-    list_flags += [flags_sq]
-    print list_flags
 
-for sched in list_up_scheds:
+n_to_do = 2
+
+
+
+n_proc = 8
+n_per_proc = n_scheds_oct/n_proc
+#lookups_oct_div = [lookups_oct_list[i*n_per_proc:(i+1)*n_per_proc] for i in range(n_proc)]
+sched_oct_div = [sched_oct_list[i*n_per_proc:(i+1)*n_per_proc] for i in range(n_proc)]
+
+scheds_per_round = 5
+
+
+print 'Done with first part'
+
+#good = do_first_n_stabs(sched_oct_div[0][:], [flags_oct], d5_stabs[1:n_to_do],
+#                 flags_sq, perms_important_sq[:], scheds_per_round)
+#print len(good)
+#sys.exit(0)
+
+pool = mp.Pool(n_proc)
+results = [pool.apply_async(do_first_n_stabs, (sched_oct_div[i][:],
+                                               [flags_oct],
+                                               d5_stabs[1:n_to_do],
+                                               flags_sq,
+                                               perms_important_sq[:],
+                                               scheds_per_round))
+                                        for i in range(n_proc)]
+pool.close()
+pool.join()
+n_good_results = [r.get() for r in results]
+
+#print n_good_results
+print len(n_good_results)
+for i in range(len(n_good_results)):
+    print len(n_good_results[i])
+
+output_dict = {}
+running_i = 0
+for result_1_proc in n_good_results:
+    for good_sched in result_1_proc:
+        output_dict[running_i] = good_sched
+        running_i += 1
+
+
+octagon_filename = 'schedules_octagon_%s_and_corner.json' %flags_str
+outfile = open(octagon_filename, 'w')
+json.dump(output_dict, outfile, indent=4, separators=(',', ':'),
+          sort_keys=True)
+outfile.close()
+
+
+'''
+list_scheds = do_first_n_stabs(lookups_oct_list[:], sched_oct_list[:], [flags_oct],
+                               d5_stabs[1:n_to_do], flags_sq, perms_important_sq[:],
+                               scheds_per_round)
+for sched in list_scheds:
     print sched
-print len(list_up_scheds)
-print len(list_up_lookups)
-
+print len(list_scheds)
+'''
