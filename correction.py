@@ -243,7 +243,108 @@ class Surface_Code_ion_trap:
         return stabs_circ 
         
                                         
+
+class Flag_Correct:
+    '''
+    Measure stabilizers with a bare ancilla and flags, not cat states.
+    Class defined to implement the 4.8.8 color codes
+    '''
+
+    @classmethod
+    def generate_one_flagged_stab(cls, i_first_anc, stabilizer, flags, 
+                                  meas_errors, Is_after_two, to_ancilla):
+        '''
+        '''
+
+        n_flags = len(flags)
+        Pauli_oper = stabilizer[0][0]
+        coupling_gate = 'C'+Pauli_oper
+
+        stab_circ = Circuit()
+        stab_circ.add_gate_at([i_first_anc], 'PrepareXPlus')
+        for i in range(n_flags):
+            stab_circ.add_gate_at([i_first_anc+i+1], 'PrepareZPlus')
+
+        for i in range(len(stabilizer)):
+            for flag in flags:
+                if i in flag:
+                    flag_i = flags.index(flag)
+                    stab_circ.add_gate_at([i_first_anc, i_first_anc+flag_i+1], 'CX')
+                    if Is_after_two:
+                        stab_circ.add_gate_at([i_first_anc], 'I')
+                        stab_circ.add_gate_at([i_first_anc+flag_i+1], 'I')
+
+            stab_circ.add_gate_at([i_first_anc, stabilizer[i][1]], coupling_gate)
+            if Is_after_two:
+                stab_circ.add_gate_at([i_first_anc], 'I')
+                stab_circ.add_gate_at([stabilizer[i][1]], 'I')
+
+        if meas_errors:
+            stab_circ.add_gate_at([i_first_anc], 'ImX')
+        stab_circ.add_gate_at([i_first_anc], 'MeasureX')
+        for i in range(n_flags):
+            if meas_errors:
+                stab_circ.add_gate_at([i_first_anc+i+1], 'ImZ')
+            stab_circ.add_gate_at([i_first_anc+i+1], 'MeasureZ')
+
+        if to_ancilla:
+            stab_circ.to_ancilla(range(i_first_anc, i_first_anc+n_flags+1))
+
+        return stab_circ
+
+
+    @classmethod
+    def generate_all_flagged_stabs(cls, stabilizer_list, flags_list,
+                                   meas_errors, Is_after_two, n_data):
+        '''
+        '''
+
+        stabs_circ = Circuit()
+        for i in range(len(stabilizer_list)):
+
+            stabs_circ1 = Flag_Correct.generate_one_flagged_stab(n_data,
+                                                            stabilizer_list[i],
+                                                            flags_list[i],
+                                                            meas_errors,
+                                                            Is_after_two,
+                                                            True)
         
+            stabs_circ.join_circuit(stabs_circ1)
+        
+        return stabs_circ
+
+
+
+    @classmethod
+    def generate_whole_QEC_circ(cls, n_rep, stabilizer_list, flags_list,
+                                meas_errors, Is_after_two, n_data):
+        '''
+        '''
+
+        # We assume that the first half of the stabilizers are one kind (X)
+        # and the second half are the other kind.
+
+        n_stabs = len(stabilizer_list)
+        stabs1, flags1 = stabilizer_list[:n_stabs/2], flags_list[:n_stabs/2]
+        stabs2, flags2 = stabilizer_list[n_stabs/2:], flags_list[n_stabs/2:]
+    
+        complete_circ = Circuit()
+        for rep_i in range(n_rep):
+            
+            circ1 = Flag_Correct.generate_all_flagged_stabs(stabs1, flags1, 
+                                           meas_errors, Is_after_two, n_data)
+            circ1 = Encoded_Gate('Stabilizers_X', [circ1]).circuit_wrap()
+            
+            circ2 = Flag_Correct.generate_all_flagged_stabs(stabs2, flags2,
+                                           meas_errors, Is_after_two, n_data)
+            circ2 = Encoded_Gate('Stabilizers_Z', [circ2]).circuit_wrap()
+            circ1.join_circuit(circ2)
+            
+            circ1 = Encoded_Gate('Rep_%i'%rep_i, [circ1]).circuit_wrap()
+            complete_circ.join_circuit(circ1)
+
+        return complete_circ
+
 
 
 class Bare_Correct:
@@ -334,6 +435,7 @@ class Bare_Correct:
                         [rep_meas_circ]).circuit_wrap()
 
         #brow.from_circuit(rep_meas_circ, True)
+        #sys.exit(0)
 
         return rep_meas_circ
 
