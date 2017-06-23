@@ -317,7 +317,8 @@ class Flag_Correct:
 
     @classmethod
     def generate_whole_QEC_circ(cls, n_rep, stabilizer_list, flags_list,
-                                meas_errors, Is_after_two, n_data):
+                                meas_errors, Is_after_two, n_data,
+                                group_reps=False):
         '''
         '''
 
@@ -333,14 +334,17 @@ class Flag_Correct:
             
             circ1 = Flag_Correct.generate_all_flagged_stabs(stabs1, flags1, 
                                            meas_errors, Is_after_two, n_data)
-            circ1 = Encoded_Gate('Stabilizers_X', [circ1]).circuit_wrap()
             
             circ2 = Flag_Correct.generate_all_flagged_stabs(stabs2, flags2,
                                            meas_errors, Is_after_two, n_data)
-            circ2 = Encoded_Gate('Stabilizers_Z', [circ2]).circuit_wrap()
+            
+            circ1 = Encoded_Gate('Stabilizers_X%i'%rep_i, [circ1]).circuit_wrap()
+            
+            circ2 = Encoded_Gate('Stabilizers_Z%i'%rep_i, [circ2]).circuit_wrap()
             circ1.join_circuit(circ2)
             
-            circ1 = Encoded_Gate('Rep_%i'%rep_i, [circ1]).circuit_wrap()
+            if group_reps:
+                circ1 = Encoded_Gate('Rep_%i'%rep_i, [circ1]).circuit_wrap()
             complete_circ.join_circuit(circ1)
 
         return complete_circ

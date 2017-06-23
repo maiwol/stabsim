@@ -900,6 +900,38 @@ class QEC_d5(Quantum_Operation):
 
 
 
+class QEC_with_flags(Quantum_Operation):
+    '''
+    '''
+
+    def run_one_roundCSS(self, circuit, previous_flag_outcomes,
+                         n_flags=[1,1,1]):
+        '''
+        previous_flags_outcomes:  the triggering pattern 
+        n_flags:  the number of flags for each stabilizer
+        QEC d3:   [1,1,1]
+        QEC d5:   [2,1,1,1,1,1,1,1]
+        '''
+
+        out_dict = self.run_one_circ(circuit)
+        out_keys = out_dict.keys()[:]
+        out_keys.sort()
+        #print out_keys
+        stab_keys = []
+        stab_i = 0
+        for flag in n_flags:
+            stab_keys += [out_keys[stab_i]]
+            stab_i += 1
+            stab_i += flag
+
+        #print stab_keys
+        #print out_keys
+
+        return out_dict
+
+
+
+
 class Supra_Circuit(object):
     '''
     a supra-circuit is composed of several quantum operations.

@@ -10,6 +10,25 @@ from visualizer import browser_vis as brow
 
 
 
+def change_operators(stab_list):
+    '''
+    takes in a list of Pauli operators (either all X or all Z)
+    and returns "the opposite".  The operators themselves are
+    in a string.
+    '''
+    out_list = []
+    for stab in stab_list:
+        new_stab = ''
+        for oper in stab:
+            if oper == 'X':    new_stab += 'Z'
+            elif oper == 'Z':  new_stab += 'X'
+            else:              new_stab += oper
+        out_list += [new_stab]
+    
+    return out_list
+
+
+
 def remove_given_parity(list_elements, parity):
     '''
     Removes the elements of a given parity from the list
