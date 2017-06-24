@@ -28,4 +28,5 @@ Z_stabs, Z_destabs = qfun.change_operators(X_stabs), qfun.change_operators(X_des
 init_state = [Z_stabs, Z_destabs]
 chp_loc = './chp_extended'
 QEC_flags = qwrap.QEC_with_flags(init_state, QEC_circ_list[:], chp_loc)
-out_dict = QEC_flags.run_one_roundCSS(0, 'bla', n_flags)
+first_flags = ((0,0),0,0,0,0,0,0,0)
+out_dict = QEC_flags.run_one_roundCSS(0, first_flags, n_flags)

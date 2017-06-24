@@ -914,20 +914,14 @@ class QEC_with_flags(Quantum_Operation):
         '''
 
         out_dict = self.run_one_circ(circuit)
-        out_keys = out_dict.keys()[:]
-        out_keys.sort()
-        #print out_keys
-        stab_keys = []
-        stab_i = 0
-        for flag in n_flags:
-            stab_keys += [out_keys[stab_i]]
-            stab_i += 1
-            stab_i += flag
+        corr, flag_outcomes = qfun.get_syn_with_flags(out_dict,
+                                                      previous_flag_outcomes,
+                                                      n_flags)
+        
+        print corr
+        print flag_outcomes
 
-        #print stab_keys
-        #print out_keys
-
-        return out_dict
+        return None
 
 
 

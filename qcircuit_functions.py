@@ -7,6 +7,41 @@ import fivequbit
 import d5color
 import correction as cor
 from visualizer import browser_vis as brow
+import schedules_d5
+
+QEC_lookuptable = schedules_d5.lookups
+
+
+def get_syn_with_flags(out_dict,
+                       previous_flag_outcomes=((0,0),0,0,0,0,0,0,0),
+                       n_flags=[1,1,1]):
+
+    out_keys = out_dict.keys()[:]
+    out_keys.sort()
+
+    syn = []
+    flag_outcomes = []
+    stab_i = 0
+    for flag in n_flags:
+        stab_i_old = stab_i
+        stab_key = out_keys[stab_i]
+        syn += [out_dict[stab_key][0]]
+
+        stab_i += 1
+        stab_i += flag
+
+        flag_keys = out_keys[stab_i_old+1:stab_i]
+        flag_outcome = [out_dict[key][0] for key in flag_keys]
+        if len(flag_outcome) == 1:
+            flag_outcomes += [flag_outcome[0]]
+        else:                   
+            flag_outcomes += [tuple(flag_outcome)]
+
+    flag_outcomes = tuple(flag_outcomes)
+    syn = tuple(syn)
+    corr = QEC_lookuptable[previous_flag_outcomes][syn]
+
+    return corr, flag_outcomes
 
 
 

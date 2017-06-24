@@ -20,8 +20,21 @@ d5_stabs = [
               [8,9,12,13]
            ]
 
+d5_stabs_good = [
+              [2,3,6,5,9,10,14,13],
+              [0,1,2,3],
+              [0,2,4,5],
+              [4,5,8,9],
+              [8,9,12,13],
+              [6,7,10,11],
+              [10,11,14,15],
+              [7,11,15,16]
+]
+
+
 logical_oper = range(n_total)
 log_bin = sched_fun.convert_to_binary(logical_oper)
+color_code_stabs = d5_stabs_good[:]
 
 # Errors
 errors_0 = [[]]
@@ -39,7 +52,7 @@ total_errors = errors_0 + errors_1 + errors_2
 trivial_lookup = {}
 for err in errors_0:
     err_bin = sched_fun.convert_to_binary(err, n_total)
-    syn = tuple(sched_fun.error_to_syndrome(err_bin, n_total, d5_stabs[:]))
+    syn = tuple(sched_fun.error_to_syndrome(err_bin, n_total, color_code_stabs[:]))
     trivial_lookup[syn] = err_bin
     
 # Basic lookuptable is the basis of every dictionary.
@@ -47,7 +60,7 @@ for err in errors_0:
 basic_lookup = {}
 for err in errors_0 + errors_1:
     err_bin = sched_fun.convert_to_binary(err, n_total)
-    syn = tuple(sched_fun.error_to_syndrome(err_bin, n_total, d5_stabs[:]))
+    syn = tuple(sched_fun.error_to_syndrome(err_bin, n_total, color_code_stabs[:]))
     basic_lookup[syn] = err_bin
 
 
@@ -56,7 +69,7 @@ for err in errors_0 + errors_1:
 dict_noflag = {}
 for err in total_errors:
     err_bin = sched_fun.convert_to_binary(err, n_total)
-    syn = tuple(sched_fun.error_to_syndrome(err_bin, n_total, d5_stabs[:]))
+    syn = tuple(sched_fun.error_to_syndrome(err_bin, n_total, color_code_stabs[:]))
     dict_noflag[syn] = err_bin
 
 
@@ -348,9 +361,12 @@ def all_hooks(sched_flags, flags=['f1'], err_weight=1, n_total=17):
 
 
 
-def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=d5_stabs[:]):
+def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=color_code_stabs[:]):
     '''
     '''
+
+    #print 'sched bare =', sched_bare
+    #print 'flags = ', flags
 
     # First we add the flags to the schedule
     sched_flags = sched_fun.add_flags_to_sched(sched_bare, flags)
@@ -452,7 +468,7 @@ def add_two_lookups(trig_comb1, lookup1, trig_comb2, lookup2,
         
 
 def merge_two_lookups_dicts(old_lookups, old_scheds, old_flags, new_lookups, 
-                            new_sched, new_flags, n_total=17, stabs=d5_stabs[:]):
+                            new_sched, new_flags, n_total=17, stabs=color_code_stabs[:]):
     '''
     '''
 
@@ -684,7 +700,7 @@ print n_good_results
 #print lo.keys()
 
 def add_extra_sched(old_lookups, old_scheds, old_flags, new_sched, new_flags,
-                    n_total=17, stabs=d5_stabs[:]):
+                    n_total=17, stabs=color_code_stabs[:]):
     '''
     '''
     
@@ -693,9 +709,15 @@ def add_extra_sched(old_lookups, old_scheds, old_flags, new_sched, new_flags,
                                                    n_total, stabs)
     if not exist1:  return False, {}, [] 
 
+    #print 'Exist 1', exist1
+
     # Then we compute the dict2
     #print old_scheds
+    #print old_flags
+    #print new_sched
+    #print new_flags
     #print type(old_lookups)
+    
     exist2, updated_lookups = merge_two_lookups_dicts(old_lookups, old_scheds,
                                                       old_flags, new_lookups,
                                                       new_sched, new_flags,
@@ -746,7 +768,6 @@ def next_good_scheds(list_old_lookups, list_old_scheds, old_flags, new_stab,
 
 
 
-
 def do_first_n_stabs(list_up_scheds, list_flags, stabs_to_add,
                      flags_sq, perms_important_sq, scheds_per_round):
     '''
@@ -794,15 +815,68 @@ def do_first_n_stabs(list_up_scheds, list_flags, stabs_to_add,
 
 
 
+#def add_extra_sched(old_lookups, old_scheds, old_flags, new_sched, new_flags,
+#                    n_total=17, stabs=d5_stabs[:]):
+#    return True, updated_lookups, updated_scheds
 
 flags_oct = [[1,6], [2,7]]
+sched_octagon = [2,3,6,5,9,10,14,13]
+flags_sq = [[1,3]]
+
+def lookup_tables_for_set_schedules(sched_octagon, flags_octagon, schedules_sq, flags_sq,
+                                    n_total=17, stabs=d5_stabs_good):
+
+    exists_oct, pre_lookup_oct = all_lookups_one_schedule(sched_octagon, flags_octagon)
+    final_lookups = {}
+    for comb_trig in pre_lookup_oct:
+        final_lookups[(comb_trig,)] = pre_lookup_oct[comb_trig]
+    
+    total_flags = [flags_octagon[:]]
+    final_scheds = [sched_octagon[:]] 
+    
+    #print total_flags
+    #print final_scheds
+    #print final_lookups.keys()
+
+    for sched_sq in schedules_sq:
+
+        exist, final_lookups, final_scheds = add_extra_sched(final_lookups, 
+                                                             final_scheds,
+                                                             total_flags[:],
+                                                             sched_sq[:],
+                                                             flags_sq[:],
+                                                             n_total,
+                                                             stabs)
+        if not exist:  return False, {}, []
+        total_flags += [flags_sq]
+
+    return exist, final_lookups, final_scheds 
+
+
+exist, lookups, scheds = lookup_tables_for_set_schedules(sched_octagon, flags_oct, 
+                                                         d5_stabs_good[1:], flags_sq[:])
+lookups_string_keys = {}
+for comb_trig in lookups:
+    lookups_string_keys[str(comb_trig)] = lookups[comb_trig]
+
+
+print exist
+print scheds
+print len(lookups.keys())
+lookups_filename = 'lookups_basic.json'
+lookups_file = open(lookups_filename, 'w')
+json.dump(lookups_string_keys, lookups_file)
+lookups_file.close()
+sys.exit(0)
+
+
 flags_str = '_'.join(map(str,[q for flag in flags_oct for q in flag]))
 octagon_filename = 'schedules_octagon_%s.json' %flags_str
 json_file = open(octagon_filename, 'r')
 json_dict = json.load(json_file)
 json_file.close()
 #sched_oct = json_dict['0']
-n_scheds_oct = len(json_dict)/20
+n_scheds_oct = len(json_dict)
 sched_oct_list = []
 #lookups_oct_list = []
 for sched_oct in json_dict.values()[:n_scheds_oct]:
@@ -822,16 +896,40 @@ for perm in it.permutations(range(4)):
         perms_reversed_sq += [tuple(reversed(perm))]
 
 
-n_to_do = 2
+n_to_do = 4
+
+print sched_oct_list[:1]
+if [[2,3,6,5,9,10,14,13]] in sched_oct_list:  print 'HOA'
+
+up_sched = do_first_n_stabs([[[2,3,6,5,9,10,14,13]]], [flags_oct], d5_stabs[1:8], flags_sq,
+                            [(0,1,2,3)], 1)
+print up_sched
+sys.exit(0)
+
+
+up_sched = do_first_n_stabs(sched_oct_list[:10], [flags_oct], d5_stabs[1:8], flags_sq,
+                 [(0,1,2,3)], 10)
+output_dict = {}
+running_i = 0
+for good_sched in up_sched:
+    output_dict[running_i] = good_sched
+    running_i += 1
+octagon_filename = 'schedules_octagon_%s_and_all.json' %flags_str
+outfile = open(octagon_filename, 'w')
+json.dump(output_dict, outfile, indent=4, separators=(',', ':'),
+          sort_keys=True)
+outfile.close()
+sys.exit(0)
 
 
 
-n_proc = 8
+
+n_proc = 6
 n_per_proc = n_scheds_oct/n_proc
 #lookups_oct_div = [lookups_oct_list[i*n_per_proc:(i+1)*n_per_proc] for i in range(n_proc)]
 sched_oct_div = [sched_oct_list[i*n_per_proc:(i+1)*n_per_proc] for i in range(n_proc)]
 
-scheds_per_round = 5
+scheds_per_round = 2
 
 
 print 'Done with first part'
