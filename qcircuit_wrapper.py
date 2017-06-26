@@ -918,12 +918,20 @@ class QEC_with_flags(Quantum_Operation):
                                                       previous_flag_outcomes,
                                                       n_flags)
         
-        print corr
-        print flag_outcomes
+        return corr, flag_outcomes
 
-        return None
-
-
+    def run_first_round_d5(self, init_state, QEC_circs):
+        '''
+        Makeshift function only to test that we can correct every hook error
+        '''
+        corrX, flags_outcomesX = self.run_one_roundCSS(0, ((0,0),0,0,0,0,0,0,0), 
+                                                       [2,1,1,1,1,1,1,1])
+        print corrX, flags_outcomesX
+        corrZ, flags_outcomesZ = self.run_one_roundCSS(1, flags_outcomesX,
+                                                       [2,1,1,1,1,1,1,1])
+        print corrZ, flags_outcomesZ                   
+        
+        return return corrX, flags_outcomesX, corrZ, flags_outcomesZ
 
 
 class Supra_Circuit(object):
