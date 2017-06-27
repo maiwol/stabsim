@@ -251,6 +251,74 @@ class Flag_Correct:
     '''
 
     @classmethod
+    def generate_Reichardt_d3_1_flag(cls, meas_errors, Is_after_two, stabs='Z'):
+        '''
+        Specific to the circuit in Figure 8b in arXiv:1705.02329
+        '''
+        n_data = 7
+        n_anc = 4
+        CNOT_indices = [[6,7], [10,7], [7,9], [5,7], [7,8], [4,7], [3,7],
+                        [1,8], [2,8], [4,9], [0,9], [2,9], [10,7], [10,8], [10,9]]
+        Z_indices = [7,8,9]
+        X_indices = [10]
+        if stabs == 'X':
+            CNOT_indices = [[CNOT_i[1], CNOT_i[0]] for CNOT_i in CNOT_indices]
+            Z_indices = [10]
+            X_indices = [7,8,9]
+
+        Reich_circ = Circuit()
+        for i in range(n_data):
+            Reich_circ.add_gate_at([i], 'I')
+
+        for i in Z_indices:
+            Reich_circ.add_gate_at([i], 'PrepareZPlus')
+        for i in X_indices:
+            Reich_circ.add_gate_at([i], 'PrepareXPlus')
+
+        for CNOT_i in CNOT_indices:
+            Reich_circ.add_gate_at(CNOT_i, 'CX')
+            if Is_after_two:
+                Reich_circ.add_gate_at([CNOT_i[0]], 'I')
+                Reich_circ.add_gate_at([CNOT_i[1]], 'I')
+        
+        for i in Z_indices:
+            if meas_errors:
+                Reich_circ.add_gate_at([i], 'ImZ')
+            Reich_circ.add_gate_at([i], 'MeasureZ')
+        for i in X_indices:
+            if meas_errors:
+                Reich_circ.add_gate_at([i], 'ImX')
+            Reich_circ.add_gate_at([i], 'MeasureX')
+        
+        Reich_circ.to_ancilla(range(n_data, n_data+n_anc))
+        
+        return Reich_circ
+
+
+    @classmethod
+    def generate_whole_QEC_Reichardt(cls, meas_errors, Is_after_two, n_rep=3, group_reps=False):
+        '''
+        '''
+        
+        complete_circ = Circuit()
+        for rep_i in range(n_rep):
+            
+            circ1 = Flag_Correct.generate_Reichardt_d3_1_flag(meas_errors, Is_after_two, 'X') 
+            circ2 = Flag_Correct.generate_Reichardt_d3_1_flag(meas_errors, Is_after_two, 'Z')
+            
+            circ1 = Encoded_Gate('Stabilizers_X%i'%rep_i, [circ1]).circuit_wrap()
+            circ2 = Encoded_Gate('Stabilizers_Z%i'%rep_i, [circ2]).circuit_wrap()
+            circ1.join_circuit(circ2)
+            
+            if group_reps:
+                circ1 = Encoded_Gate('Rep_%i'%rep_i, [circ1]).circuit_wrap()
+            complete_circ.join_circuit(circ1)
+
+        return complete_circ
+
+
+
+    @classmethod
     def generate_one_flagged_stab(cls, i_first_anc, stabilizer, flags, 
                                   meas_errors, Is_after_two, to_ancilla):
         '''

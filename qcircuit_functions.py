@@ -1,5 +1,6 @@
 import sys
 import copy
+import itertools as it
 import circuit as c
 import cross
 import steane
@@ -43,6 +44,74 @@ def get_syn_with_flags(out_dict,
 
     return corr, flag_outcomes
 
+
+
+def add_errors_after_gates(circ, gates_indexes, errors_to_add=['XX']):
+    '''
+    Inserts specific errors after specific gates.
+    circ:  the circuit onto which we want to add the errors.
+    gates_indexes:  the indexes of the gates after which we want to 
+                    add the errors (a list).
+    errors_to_add:  the errors to add (a list of same length)
+    '''
+
+    # Instead of gates_indexes.sort(), we apply a conditional sorting.
+    if gates_indexes[0] > gates_indexes[-1]:
+        gate_indexes.reverse()
+        errors_to_add.reverse()
+
+    for j in gates_indexes[::-1]:
+        g = circ.gates[j]
+        i = gates_indexes.index(j)
+        if len(errors_to_add[i]) == 1:
+            new_g = circ.insert_gate(g, g.qubits, '', errors_to_add[i], False)
+            new_g.is_error = True
+        else:
+            new_g = circ.insert_gate(g, [g.qubits[1]], '', errors_to_add[i][1], False)
+            new_g.is_error = True
+            new_g = circ.insert_gate(g, [g.qubits[0]], '', errors_to_add[i][0], False)
+            new_g.is_error = True
+
+    return
+
+
+
+def get_total_indexes_one_circ(subset, one_q_gates, two_q_gates,
+                               one_q_errors_type=['X'],
+                               two_q_errors_type=['IX','XI','XX']):
+    '''
+    Returns the total list of indexes for all the error configurations
+    in an error subset (n1, n2)
+    subset:  for example, (1,1):  1 1-q error + 1 2-q error.
+    one_q_gates:  the list of all the indexes corresponding to the 
+                  locations of 1-q gates.
+    two_q_gates:  the list of all the indexes corresponding to the
+                  locations of 2-q gates.
+    Currently, one_q_errors_type can only have 1 element, but it's
+    easy to generalize.
+    '''
+
+    n_one_q_errors = subset[0]
+    n_two_q_errors = subset[1]
+    
+    total_indexes, total_errors = [], []
+    for comb1 in it.combinations(one_q_gates, n_one_q_errors):
+        for comb2 in it.combinations(two_q_gates, n_two_q_errors):
+            for two_err in it.product(two_q_errors_type, repeat=n_two_q_errors):
+                local_indexes, local_errors = [], []
+                for g_index in comb1:
+                    local_indexes += [g_index]
+                    local_errors += [one_q_errors_type[0]]
+                for g_index in comb2:
+                    local_indexes += [g_index]
+                    local_errors += [two_err[comb2.index(g_index)]]
+
+                total_indexes += [local_indexes]
+                total_errors += [local_errors]
+
+    return total_indexes, total_errors
+
+    
 
 
 def change_operators(stab_list):

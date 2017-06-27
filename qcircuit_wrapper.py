@@ -931,7 +931,28 @@ class QEC_with_flags(Quantum_Operation):
                                                        [2,1,1,1,1,1,1,1])
         print corrZ, flags_outcomesZ                   
         
-        return return corrX, flags_outcomesX, corrZ, flags_outcomesZ
+        return corrX, flags_outcomesX, corrZ, flags_outcomesZ
+
+
+    def run_one_round_Reichardt_d3(self, circuit, previous_flag_outcome):
+        '''
+        One round of the circuit from Reichardt paper (Figure 8b) to measure
+        the 3 stabilizers of the d3 color code with only one flag.
+        '''
+
+        out_dict = self.run_one_circ(circuit)
+        out_keys = out_dict.keys()[:]
+        out_keys.sort()
+        syn = [out_dict[i][0] for i in out_keys[:-1]]
+        flag = out_dict[out_keys[-1]][0]
+        print 'syn =', syn
+        print 'flag =', flag
+        Steane_lookup = st.Code.total_lookup_table
+        corr = Steane_lookup[previous_flag_outcome][tuple(syn)]
+        print 'corr = ', corr
+
+        #return corr, flag
+
 
 
 class Supra_Circuit(object):

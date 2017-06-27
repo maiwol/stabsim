@@ -97,6 +97,26 @@ class Code:
                     (1,1,0):["I","I","I","I","I","E","I"],
                     (1,1,1):["I","I","I","I","I","I","E"]}
 
+    # look-up table in case the flag was triggered.
+    # this applies when there is a single flag for the
+    # 3 stabilizers.
+    # syndromes (1,0,1) and (1,1,0) are only caused by
+    # w-2 events.
+    stabilizer_syndrome_dict_flag = {
+                    (0,0,0):["I","I","I","I","I","I","I"],
+                    (0,0,1):["I","E","E","I","I","I","I"],
+                    (0,1,0):["E","I","E","I","I","I","I"],
+                    (0,1,1):["I","I","E","I","I","I","I"],
+                    (1,0,0):["I","I","I","E","I","I","I"],
+                    (1,0,1):["I","I","I","I","E","I","I"],
+                    (1,1,0):["I","I","I","I","I","E","I"],
+                    (1,1,1):["I","I","I","I","I","I","E"]
+                    }
+                    
+    total_lookup_table = {
+                    0: stabilizer_syndrome_dict,
+                    1: stabilizer_syndrome_dict_flag
+                    }
     # stabilizers in CHP-friendly format
     
     stabilizer_CHP = [
@@ -415,7 +435,7 @@ class Generator:
         return circ
 
     @classmethod
-    def encoded_destructive_measurement(cls, gate_name=None):
+    def encoded_destructive_measurement(cls, gate_name=None, meas_errors=True):
         """This defines a destructive measurement circuit of an encoded pauli gate
         of a CSS code.
         Note that in order to make this fault-tolerant one must use this carefully.
@@ -429,8 +449,11 @@ class Generator:
 
         n_data = Code.block_size
 
+        I_error = 'Im' + gate_name
         m_circ=Circuit()
         for index in range(n_data):
+            if meas_errors:
+                m_circ.add_gate_at([index], I_error)
             m_circ.add_gate_at([index],'Measure'+gate_name+'Destroy')
 
         return m_circ
