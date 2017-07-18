@@ -251,7 +251,8 @@ class Flag_Correct:
     '''
 
     @classmethod
-    def generate_Reichardt_d3_1_flag(cls, meas_errors, Is_after_two, stabs='Z'):
+    def generate_Reichardt_d3_1_flag(cls, meas_errors, Is_after_two, stabs='Z',
+                                     with_flag=True, initial_I=False):
         '''
         Specific to the circuit in Figure 8b in arXiv:1705.02329
         '''
@@ -261,14 +262,22 @@ class Flag_Correct:
                         [1,8], [2,8], [4,9], [0,9], [2,9], [10,7], [10,8], [10,9]]
         Z_indices = [7,8,9]
         X_indices = [10]
+        
+        if not with_flag:
+            n_anc = 3
+            CNOT_indices = [[6,7], [7,9], [5,7], [7,8], [4,7], [3,7],
+                            [1,8], [2,8], [4,9], [0,9], [2,9]]
+            X_indices = []
+
         if stabs == 'X':
             CNOT_indices = [[CNOT_i[1], CNOT_i[0]] for CNOT_i in CNOT_indices]
-            Z_indices = [10]
+            Z_indices = X_indices[:]
             X_indices = [7,8,9]
 
         Reich_circ = Circuit()
-        for i in range(n_data):
-            Reich_circ.add_gate_at([i], 'I')
+        if initial_I:
+            for i in range(n_data):
+                Reich_circ.add_gate_at([i], 'I')
 
         for i in Z_indices:
             Reich_circ.add_gate_at([i], 'PrepareZPlus')
@@ -295,15 +304,20 @@ class Flag_Correct:
         return Reich_circ
 
 
+    
     @classmethod
-    def generate_whole_QEC_Reichardt(cls, meas_errors, Is_after_two, n_rep=3, group_reps=False):
+    def generate_whole_QEC_Reichardt(cls, meas_errors, Is_after_two, n_rep=3, group_reps=False,
+                                     initial_I=False):
         '''
         '''
         
         complete_circ = Circuit()
         for rep_i in range(n_rep):
-            
-            circ1 = Flag_Correct.generate_Reichardt_d3_1_flag(meas_errors, Is_after_two, 'X') 
+            if rep_i == 0 and initial_I:
+                circ1 = Flag_Correct.generate_Reichardt_d3_1_flag(meas_errors, Is_after_two, 'X',
+                                                                  True, True)  
+            else:
+                circ1 = Flag_Correct.generate_Reichardt_d3_1_flag(meas_errors, Is_after_two, 'X') 
             circ2 = Flag_Correct.generate_Reichardt_d3_1_flag(meas_errors, Is_after_two, 'Z')
             
             circ1 = Encoded_Gate('Stabilizers_X%i'%rep_i, [circ1]).circuit_wrap()
@@ -315,6 +329,27 @@ class Flag_Correct:
             complete_circ.join_circuit(circ1)
 
         return complete_circ
+
+
+    
+    @classmethod
+    def generate_whole_QEC_Reichardt_special(cls, meas_errors, Is_after_two, initial_I=False):
+        '''
+        special circuit to run the Reichardt circuit using only 1 flag.
+        The circuit consists of Sx(f), Sz(f), ( Sx(f), Sz(f) ), ( Sx(b), Sz(b) )
+        '''
+        
+        QEC_circ = Flag_Correct.generate_whole_QEC_Reichardt(meas_errors, Is_after_two, 1,
+                                                             False, initial_I)
+
+        circ1 = Flag_Correct.generate_Reichardt_d3_1_flag(meas_errors, Is_after_two, 'X', False) 
+        circ2 = Flag_Correct.generate_Reichardt_d3_1_flag(meas_errors, Is_after_two, 'Z', False)
+        circ1 = Encoded_Gate('Stabilizers_X_bare', [circ1]).circuit_wrap()
+        circ2 = Encoded_Gate('Stabilizers_Z_bare', [circ2]).circuit_wrap()
+        circ1.join_circuit(circ2)
+        QEC_circ.join_circuit(circ1)
+
+        return QEC_circ
 
 
 

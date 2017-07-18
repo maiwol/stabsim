@@ -934,7 +934,8 @@ class QEC_with_flags(Quantum_Operation):
         return corrX, flags_outcomesX, corrZ, flags_outcomesZ
 
 
-    def run_one_round_Reichardt_d3(self, circuit, previous_flag_outcome):
+    def run_one_round_Reichardt_d3(self, circuit, previous_flag_outcome,
+                                   with_flag=True):
         '''
         One round of the circuit from Reichardt paper (Figure 8b) to measure
         the 3 stabilizers of the d3 color code with only one flag.
@@ -943,15 +944,51 @@ class QEC_with_flags(Quantum_Operation):
         out_dict = self.run_one_circ(circuit)
         out_keys = out_dict.keys()[:]
         out_keys.sort()
-        syn = [out_dict[i][0] for i in out_keys[:-1]]
-        flag = out_dict[out_keys[-1]][0]
-        print 'syn =', syn
-        print 'flag =', flag
+        if with_flag:
+            syn = [out_dict[i][0] for i in out_keys[:-1]]
+            flag = out_dict[out_keys[-1]][0]
+        else:
+            syn = [out_dict[i][0] for i in out_keys[:]]
+            flag = None
+            
+        #print 'syn =', syn
+        #print 'flag =', flag
         Steane_lookup = st.Code.total_lookup_table
         corr = Steane_lookup[previous_flag_outcome][tuple(syn)]
-        print 'corr = ', corr
+        #print 'corr = ', corr
 
-        #return corr, flag
+        return corr, flag
+
+   
+
+    def run_all_Reichardt_d3(self, init_state):
+        '''
+        Makeshift function to make sure we can correct all the hook errors
+        '''
+        
+        corrX, flagX = self.run_one_round_Reichardt_d3(0, 0)
+        corrZ, flagZ = self.run_one_round_Reichardt_d3(1, flagX)
+        n_errors = corrX.count('E') + corrZ.count('E') + flagX + flagZ
+        
+        if n_errors > 0:
+            # flagX2 will always be None
+            corrX2, flagX2 = self.run_one_round_Reichardt_d3(2, flagZ, False)
+            # flagZ2 will always be None as well.
+            corrZ2, flagZ2 = self.run_one_round_Reichardt_d3(3, flagX, False)
+            
+            corrX2 = [oper if oper=='I' else 'Z' for oper in corrX2]
+            corrZ2 = [oper if oper=='I' else 'X' for oper in corrZ2]
+
+            self.stabs, self.destabs = qfun.update_stabs(self.stabs[:],
+                                                         self.destabs[:],
+                                                         corrX2)
+            self.stabs, self.destabs = qfun.update_stabs(self.stabs[:],
+                                                         self.destabs[:],
+                                                         corrZ2)
+            #print corrX, flagX, corrZ, flagZ, corrX2, corrZ2
+
+        return None
+            
 
 
 

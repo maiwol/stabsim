@@ -2806,6 +2806,59 @@ def add_errors_fast_sampler(gate_indices, n_errors, subcircs, error_info):
 
 
 
+def add_errors_fast_sampler_Reich(gate_indices, n_errors, subcircs, error_info):
+    '''
+    '''
+    sampling = 'Muyalon'
+    n_subcircs = len(subcircs)   # For now: 3 (Cross and 5-qubit)
+                                 #          6 (Steane)
+
+    # get list of indices for one qubit gates and two qubit gates
+    one_q_gates = gate_indices[0]
+    two_q_gates = gate_indices[1]
+    
+    # shuffle the gate indices
+    rd.shuffle(one_q_gates)
+    rd.shuffle(two_q_gates)
+
+    selected_one_q_gates = one_q_gates[ : n_errors[0]]
+    #print "selected one qubit gates are", selected_one_q_gates
+    selected_two_q_gates = two_q_gates[ : n_errors[1]]
+    #print "selected two qubit gates are", selected_two_q_gates
+ 
+    carry_run = False   
+    faulty_subcircs = []
+    errors_dict = {}
+    for i in range(n_subcircs):
+        subcirc = subcircs[i]
+        # local gates are the gates that we are adding errors after
+        local_gates = []
+
+        for pair in selected_one_q_gates:
+            if i == pair[0]: 
+                # the selected gate must be in the current redundency subcircuit
+                local_gates += [pair[1]]
+
+        for pair in selected_two_q_gates:
+            if i == pair[0]:
+                local_gates += [pair[1]]
+
+        if len(local_gates) != 0:           
+            # if no gates selected at all, then no need to perform the add error step at all
+	        error.add_error_alternative(subcirc, error_info, sampling, local_gates)
+
+        faulty_subcircs += [subcirc]
+        
+        subcirc_dict, local_carry_run = get_errors_dict(subcirc)
+        if i >= int(n_subcircs/2): 
+            local_carry_run = False
+        carry_run = carry_run or local_carry_run
+        errors_dict[i] = subcirc_dict
+
+    return errors_dict, carry_run, faulty_subcircs
+
+
+
 def add_errors_fast_sampler_surface(gate_indices, n_errors, circ, error_info):
     '''
     '''
