@@ -336,7 +336,7 @@ class Flag_Correct:
     def generate_whole_QEC_Reichardt_special(cls, meas_errors, Is_after_two, initial_I=False):
         '''
         special circuit to run the Reichardt circuit using only 1 flag.
-        The circuit consists of Sx(f), Sz(f), ( Sx(f), Sz(f) ), ( Sx(b), Sz(b) )
+        The circuit consists of Sx(f), Sz(f), ( Sx(b), Sz(b) )
         '''
         
         QEC_circ = Flag_Correct.generate_whole_QEC_Reichardt(meas_errors, Is_after_two, 1,
@@ -413,7 +413,39 @@ class Flag_Correct:
                                                             True)
         
             stabs_circ.join_circuit(stabs_circ1)
-        
+       
+
+        return stabs_circ
+
+
+    @classmethod
+    def generate_high_indeterminacy_circuit(cls, stabilizer_list, flags_list,
+                                            meas_errors, Is_after_two, n_data):
+        '''
+        '''
+
+        stabs_circ = Circuit()
+        for i in range(len(stabilizer_list)):
+            
+            circ_flag = Flag_Correct.generate_one_flagged_stab(n_data,
+                                                            stabilizer_list[i],
+                                                            flags_list[i],
+                                                            meas_errors,
+                                                            Is_after_two,
+                                                            True)
+            circ_flag = Encoded_Gate('S%i_flag'%i, [circ_flag]).circuit_wrap()
+            
+            circ_bare = Flag_Correct.generate_one_flagged_stab(n_data,
+                                                            stabilizer_list[i],
+                                                            [],
+                                                            meas_errors,
+                                                            Is_after_two,
+                                                            True)
+            circ_bare = Encoded_Gate('S%i_bare'%i, [circ_bare]).circuit_wrap()
+            
+            stabs_circ.join_circuit(circ_flag)
+            stabs_circ.join_circuit(circ_bare)
+
         return stabs_circ
 
 
@@ -421,7 +453,7 @@ class Flag_Correct:
     @classmethod
     def generate_whole_QEC_circ(cls, n_rep, stabilizer_list, flags_list,
                                 meas_errors, Is_after_two, n_data,
-                                group_reps=False):
+                                group_reps=False, high_indet=False):
         '''
         '''
 
@@ -432,14 +464,18 @@ class Flag_Correct:
         stabs1, flags1 = stabilizer_list[:n_stabs/2], flags_list[:n_stabs/2]
         stabs2, flags2 = stabilizer_list[n_stabs/2:], flags_list[n_stabs/2:]
     
+        if high_indet:
+            circ_function = Flag_Correct.generate_high_indeterminacy_circuit
+        else:
+            circ_function = Flag_Correct.generate_all_flagged_stabs
+
+
         complete_circ = Circuit()
         for rep_i in range(n_rep):
             
-            circ1 = Flag_Correct.generate_all_flagged_stabs(stabs1, flags1, 
-                                           meas_errors, Is_after_two, n_data)
+            circ1 = circ_function(stabs1, flags1, meas_errors, Is_after_two, n_data)
             
-            circ2 = Flag_Correct.generate_all_flagged_stabs(stabs2, flags2,
-                                           meas_errors, Is_after_two, n_data)
+            circ2 = circ_function(stabs2, flags2, meas_errors, Is_after_two, n_data)
             
             circ1 = Encoded_Gate('Stabilizers_X%i'%rep_i, [circ1]).circuit_wrap()
             

@@ -479,9 +479,9 @@ class QEC_d3(Quantum_Operation):
 
 
 
-    def run_fullQEC_CSS(self, code, bare=True):
+    def run_fullQEC_CSS(self, code, bare=True, old_dec=True):
         '''
-        runs 2 or 3 rounds of QEC for a distance-3 non-CSS code,
+        runs 2 or 3 rounds of QEC for a distance-3 CSS code,
         like the Steane code or the surface-17.
         At the end, it applies a correction.
         It returns the number of QEC rounds.
@@ -490,6 +490,13 @@ class QEC_d3(Quantum_Operation):
                 qubits onto which this QEC is acting.
         post_n: number of physical qubits after the physical
                 qubits onto which this QEC is acting.
+
+        old_dec:  True if we are using the old meta-decoder,
+                  where we always measure the stabilizers at
+                  least twice.
+                  False if we are using the new meta-decoder,
+                  where we measure the stabilizers at most
+                  twice.
         '''
 
         if bare:  QEC_func = self.run_one_bare_anc
@@ -516,30 +523,42 @@ class QEC_d3(Quantum_Operation):
 
         else:
 
-            # run first 4 subcircuits (X stabs first)
-            for i in range(2):
-                #print 'stabs =', self.stabs
-                Z_data_errors += [QEC_func(2*i, code, 'X')]
-                #print 'Z errors =', Z_data_errors
-                X_data_errors += [QEC_func(2*i+1, code, 'Z')]
-                #print 'X errors =', X_data_errors
+            if old_dec:
+                # run first 4 subcircuits (X stabs first)
+                for i in range(2):
+                    #print 'stabs =', self.stabs
+                    Z_data_errors += [QEC_func(2*i, code, 'X')]
+                    #print 'Z errors =', Z_data_errors
+                    X_data_errors += [QEC_func(2*i+1, code, 'Z')]
+                    #print 'X errors =', X_data_errors
 
-            #print 'stabs after 2 =', self.stabs
+                #print 'stabs after 2 =', self.stabs
 
-            # if the outcomes of the 2 X stabs measurements
-            # don't coincide, do it a third time
-            if Z_data_errors[0] != Z_data_errors[1]:
-                Z_data_errors += [QEC_func(4, code, 'X')]
+                # if the outcomes of the 2 X stabs measurements
+                # don't coincide, do it a third time
+                if Z_data_errors[0] != Z_data_errors[1]:
+                    Z_data_errors += [QEC_func(4, code, 'X')]
         
-            # same for the Z stabs
-            if X_data_errors[0] != X_data_errors[1]:
-                X_data_errors += [QEC_func(5, code, 'Z')]
+                # same for the Z stabs
+                if X_data_errors[0] != X_data_errors[1]:
+                    X_data_errors += [QEC_func(5, code, 'Z')]
 
-            #print 'X_errors =', X_data_errors
-            #print 'Z_errors =', Z_data_errors
+                #print 'X_errors =', X_data_errors
+                #print 'Z_errors =', Z_data_errors
 
+        
+            else:
+                # run the first 2 subcircuits (X stabs first)
+                Z_data_errors += [QEC_func(0, code, 'X')]
+                X_data_errors += [QEC_func(1, code, 'Z')]
+            
+                # only run last 2 if there was an error.
+                if 'Z' in Z_data_errors[0] or 'X' in X_data_errors[0]:
+                    Z_data_errors += [QEC_func(2, code, 'X')]
+                    X_data_errors += [QEC_func(3, code, 'Z')]
+                
             Z_corr, X_corr = Z_data_errors[-1], X_data_errors[-1]
-        
+
 
         # update the final states only if a correction
         # is needed, to save some time
