@@ -953,6 +953,112 @@ class QEC_with_flags(Quantum_Operation):
         return corrX, flags_outcomesX, corrZ, flags_outcomesZ
 
 
+    def run_one_type_stabilizers_high_indet(self, index_first_subcirc,
+                                            previous_flags=(0,0,0),
+                                            error_det=False,
+                                            change_error_det='flag'):
+        '''
+        Runs one round of 3 X or 3 Z stabilizers with high indeterminancy.
+        This means that was soon as one flag is triggered or one error is
+        detected, we stop using flags and start using bare ancillae.
+        Inputs:
+        (1) index_first_subcirc:  the index of the first sub-circuit to be run
+                                  because the circuits are stored as a list.
+        (2) previous_flag:  the outcome of the previous round.  If no flag was
+                            previously triggered, then 'No'.  Else, the index
+                            of the stabilizer whose flag was triggered.
+        (3) error_det:   whether an error has been detected previously.  If so,
+                         we don't use any flags.
+        '''
+        
+        syn, flags = [], []
+        for i in range(3):
+            print 'Error det:', error_det
+            if error_det:
+                i_subcirc = index_first_subcirc + 2*i + 1
+                out_dict = self.run_one_circ(i_subcirc)
+                syn += [out_dict.values()[0][0]]
+                flags += [0]
+            else:
+                i_subcirc = index_first_subcirc + 2*i 
+                out_dict = self.run_one_circ(i_subcirc)
+                out_keys = out_dict.keys()[:]
+                out_keys.sort()
+                syn += [out_dict[out_keys[0]][0]]
+                flag = out_dict[out_keys[1]][0]
+                if flag == 1:
+                    error_det = True
+                elif change_error_det == 'any':
+                    if syn[-1] == 1:
+                        error_det = True
+                flags += [flag]
+            
+            print i_subcirc
+
+        corr = st.Code.total_lookup_table_one_flag[previous_flags][tuple(syn)]
+
+        return corr, flags, error_det
+
+
+    def run_Reichardt_d3_one_flag_stab(self, metadecoder='cheap',
+                                       change_error_det='flag'):
+        '''
+        metadecoder:  'cheap': 2.2 from Notes
+                      'standard':  more standard form
+        '''
+        
+        initial_flags = (0,0,0)
+        error_det = False
+        
+        # We start with X stabilizers
+        corrX, flagsX, error_det = self.run_one_type_stabilizers_high_indet(0,
+                                                                  initial_flags,
+                                                                  error_det,
+                                                                  change_error_det)
+
+        #print corrX
+        #print flagsX
+        
+        # If no errors were detected and no flags were triggered 
+        if corrX.count('E') == 0 and flagsX.count(1) == 0:
+        
+            # Now we measure the Z stabilizers
+            corrZ, flagsZ, error_det = self.run_one_type_stabilizers_high_indet(6,
+                                                                    flagsX,
+                                                                    error_det,
+                                                                    change_error_det)
+
+            # If no errors were detected and no flags were triggered
+            if corrZ.count('E') == 0 and flagsZ.count(1) == 0:
+                return corrX, corrZ
+
+            elif corrZ.count('E') > 1 and flagsZ.count(1) == 0:
+                corrZ2, flagsZ2, error_det = self.run_one_type_stabilizers_high_indet(18,
+                                                                   flagsX,
+                                                                   error_det,
+                                                                   change_error_det)
+            
+            elif corrZ.count('E') == 0 and flagsZ.count(1) > 0:
+                corrX2, flagsX2, error_det = self.run_one_type_stabilizers_high_indet(12,
+                                                                flagsZ,
+                                                                error_det,
+                                                                change_error_det)
+
+            else:
+                corrX2, flagsX2, error_det = self.run_one_type_stabilizers_high_indet(12,
+                                                                flagsZ,
+                                                                error_det,
+                                                                change_error_det)
+                
+
+
+        else:
+            print 'Adios'
+
+        return
+
+
+
     def run_one_round_Reichardt_d3(self, circuit, previous_flag_outcome,
                                    with_flag=True):
         '''
