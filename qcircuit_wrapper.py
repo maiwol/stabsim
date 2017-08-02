@@ -402,11 +402,11 @@ class QEC_d3(Quantum_Operation):
         # large-distance tological codes.
 
         output_dict = self.run_one_circ(circuit)
+        anc_qubit_list = sorted(output_dict.keys())
+        n_first_anc_X = min(anc_qubit_list)
         if stab_kind == 'both':
-            anc_qubit_list = sorted(output_dict.keys())
             
             # X stabilizers come first by convention
-            n_first_anc_X = min(anc_qubit_list)
             X_dict = {key: output_dict[key] 
                            for key in anc_qubit_list[:3]}
             Z_errors = qfun.stabs_QEC_bare_anc(X_dict,
@@ -425,6 +425,22 @@ class QEC_d3(Quantum_Operation):
             X_errors = ['X' if oper=='E' else oper for oper in X_errors]
        
             data_errors = Z_errors, X_errors
+
+        
+        elif stab_kind == 'X':
+            data_errors = qfun.stabs_QEC_bare_anc(output_dict,
+                                               n_first_anc_X,
+                                               code,
+                                               stab_kind)
+            data_errors = ['Z' if oper=='E' else oper for oper in data_errors]
+        
+
+        elif stab_kind == 'Z':
+            data_errors = qfun.stabs_QEC_bare_anc(output_dict,
+                                               n_first_anc_X,
+                                               code,
+                                               stab_kind)
+            data_errors = ['X' if oper=='E' else oper for oper in data_errors]
 
 
         return data_errors
@@ -551,12 +567,18 @@ class QEC_d3(Quantum_Operation):
                 # run the first 2 subcircuits (X stabs first)
                 Z_data_errors += [QEC_func(0, code, 'X')]
                 X_data_errors += [QEC_func(1, code, 'Z')]
-            
+           
+                #print Z_data_errors
+                #print X_data_errors
+
                 # only run last 2 if there was an error.
                 if 'Z' in Z_data_errors[0] or 'X' in X_data_errors[0]:
                     Z_data_errors += [QEC_func(2, code, 'X')]
                     X_data_errors += [QEC_func(3, code, 'Z')]
                 
+                    #print Z_data_errors
+                    #print X_data_errors
+
             Z_corr, X_corr = Z_data_errors[-1], X_data_errors[-1]
 
 
@@ -953,6 +975,122 @@ class QEC_with_flags(Quantum_Operation):
         return corrX, flags_outcomesX, corrZ, flags_outcomesZ
 
 
+
+    def run_one_type_stabilizers_high_indet_d5(self, index_first_subcirc,
+                                               list_syndromesX, list_syndromesZ,
+                                               list_flagsX, list_flagsZ, n_QEC=0,
+                                               errors_det=0, stab_kind='X',
+                                               added_data_err_previous=False):
+        '''
+        Runs one of round of 8 X or 8 Z stabilizers for the 4.8.8 d-5 color code
+        with high indeterminancy.
+        This means that as soon as we detect 2 errors, we stop using flags and
+        start using bare ancillae.  This can happen after several events:
+        (1) 2 flags get triggered (on separate stabilizers because the 2 flags
+            of the octagon can get triggered by a single error)
+        (2) we obtain a syndrome corresponding to 2 errors
+        (3) 1 flag gets triggered and another stabilizer gets triggered as well.
+
+        Inputs:
+        (1) index_first_subcirc:  the index of the first sub-circuit to be run
+                                  because the circuits are stored as a list.
+        (2) list_syndromesX(Z):   the list of the previous X(Z) stab syndromes.
+        (3) list_flagsX(Z):  the list of the previous X(Z) stab syndromes.
+        (4) n_QEC:  the number of QEC steps (X stabs and Z stabs) run so far.
+        (5) errors_det:     the number of errors detected so far. It it's larger than
+                            or equal to 2 we don't use flags.
+        (6) added_data_err_previous:  whether a data error was detected on the previous
+                                      step.
+        '''
+
+        syndromes, flags, subcircs_indices = [], [], []
+
+        if errors_det >= 2:
+            
+            for i in range(8):
+                i_subcirc = index_first_subcirc + 2*i + 1
+                out_dict = self.run_one_circ(i_subcirc)
+                syndromes += [out_dict.values()[0][0]]
+                if i_subcirc%8 == 0:
+                    flags += [(0,0)]
+                else:  
+                    flags += [0]
+                subcircs_indices += [i_subcirc]
+
+        else:
+
+            #stab_light = False
+            for i in range(8):
+               
+                print errors_det
+
+                if errors_det >= 2:
+                    i_subcirc = index_first_subcirc + 2*i + 1
+                    out_dict = self.run_one_circ(i_subcirc)
+                    syn = out_dict.values()[0][0]
+                    if i_subcirc%8 == 0:
+                        flag = (0,0)
+                    else:
+                        flag = 0
+                    flags += [flag]
+    
+                else:
+                    i_subcirc = index_first_subcirc + 2*i
+                    out_dict = self.run_one_circ(i_subcirc)
+                    out_keys = out_dict.keys()[:]
+                    out_keys.sort()
+                    syn = out_dict[out_keys[0]][0]
+                    flag = [out_dict[out_keys[i]][0] for i in range(1,len(out_keys))]
+                    if len(out_keys) > 2:
+                        flags += [tuple(flag)]
+                    else:
+                        flags += [flag[0]]
+                    
+                    #if syn == 1:
+                    #    if not stab_light:
+                    #        stab_light = True
+                    #        errors_det += 1
+                    #else:
+                    #    if sum(flag) > 0:
+                    #        errors_det += 1
+                    if sum(flag) > 0:
+                        errors_det += 1
+
+                syndromes += [syn]
+                subcircs_indices += [i_subcirc]
+        
+
+        # If a new data errror was detected by the stabilizers, add 1 to errors_det
+        # We have to be very careful (conservative).  We only add 1 if the syndrome
+        # is different from the last 2 syndromes, if no flags were triggered in the 2
+        # previous steps and if no data error was detected on the previous step.
+        # I'm sure we can refine it even further.
+        last_syndromeX, last_syndromeZ  = list_syndromesX[-1][:], list_syndromesZ[-1][:]
+        last_flagX, last_flagZ = list_flagsX[-1][:], list_flagsZ[-1][:]
+        sum_flagX = sum(last_flagX[0]) + sum(last_flagX[1:])
+        sum_flagZ = sum(last_flagZ[0]) + sum(last_flagZ[1:])
+        sum_current_flag = sum(flags[0]) + sum(flags[1:])
+        
+        # Define logical clauses
+        data_error_det = False
+        syn_clause = (syndromes != last_syndromeX) and (syndromes != last_syndromeZ)
+        flag_clause = (sum_flagX == 0) and (sum_flagZ == 0) and (sum_current_flag == 0)
+        if (syn_clause) and (flag_clause) and (not added_data_err_previous):
+            errors_det += 1
+            data_error_det = True
+
+        if stab_kind == 'X':
+            list_syndromesX += [syndromes]
+            list_flagsX += [flags]
+        elif stab_kind == 'Z':
+            list_syndromesZ += [syndromes]
+            list_flagsZ += [flags]
+
+        return list_syndromesX, list_syndromesZ, list_flagsX, list_flagsZ, subcircs_indices, errors_det, data_error_det
+
+
+
+
     def run_one_type_stabilizers_high_indet(self, index_first_subcirc,
                                             previous_flags=(0,0,0),
                                             error_det=False,
@@ -965,15 +1103,16 @@ class QEC_with_flags(Quantum_Operation):
         (1) index_first_subcirc:  the index of the first sub-circuit to be run
                                   because the circuits are stored as a list.
         (2) previous_flag:  the outcome of the previous round.  If no flag was
-                            previously triggered, then 'No'.  Else, the index
-                            of the stabilizer whose flag was triggered.
+                            previously triggered, then (0,0,0).  Else, the index
+                            of the stabilizer whose flag was triggered: (0,1,0)
+                            if the second stabilizer was triggered.
         (3) error_det:   whether an error has been detected previously.  If so,
                          we don't use any flags.
         '''
         
-        syn, flags = [], []
+        syn, flags, subcircs_indices = [], [], []
         for i in range(3):
-            print 'Error det:', error_det
+            #print 'Error det:', error_det
             if error_det:
                 i_subcirc = index_first_subcirc + 2*i + 1
                 out_dict = self.run_one_circ(i_subcirc)
@@ -993,11 +1132,12 @@ class QEC_with_flags(Quantum_Operation):
                         error_det = True
                 flags += [flag]
             
-            print i_subcirc
+            subcircs_indices += [i_subcirc]
 
         corr = st.Code.total_lookup_table_one_flag[previous_flags][tuple(syn)]
 
-        return corr, flags, error_det
+        return corr, flags, error_det, subcircs_indices
+
 
 
     def run_Reichardt_d3_one_flag_stab(self, metadecoder='cheap',
@@ -1011,11 +1151,12 @@ class QEC_with_flags(Quantum_Operation):
         error_det = False
         
         # We start with X stabilizers
-        corrX, flagsX, error_det = self.run_one_type_stabilizers_high_indet(0,
-                                                                  initial_flags,
-                                                                  error_det,
-                                                                  change_error_det)
-
+        output_run = self.run_one_type_stabilizers_high_indet(0,
+                                                         initial_flags,
+                                                         error_det,
+                                                         change_error_det)
+        corrX, flagsX, error_det, subcircs_i = output_run       
+        
         #print corrX
         #print flagsX
         
@@ -1023,39 +1164,127 @@ class QEC_with_flags(Quantum_Operation):
         if corrX.count('E') == 0 and flagsX.count(1) == 0:
         
             # Now we measure the Z stabilizers
-            corrZ, flagsZ, error_det = self.run_one_type_stabilizers_high_indet(6,
-                                                                    flagsX,
-                                                                    error_det,
-                                                                    change_error_det)
+            output_run = self.run_one_type_stabilizers_high_indet(6,
+                                                            tuple(flagsX),
+                                                            error_det,
+                                                            change_error_det)
+            corrZ, flagsZ, error_det, subcircs_i1 = output_run
+            subcircs_i += subcircs_i1[:]
 
             # If no errors were detected and no flags were triggered
             if corrZ.count('E') == 0 and flagsZ.count(1) == 0:
-                return corrX, corrZ
+                final_corrX, final_corrZ = corrX[:], corrZ[:]
 
-            elif corrZ.count('E') > 1 and flagsZ.count(1) == 0:
-                corrZ2, flagsZ2, error_det = self.run_one_type_stabilizers_high_indet(18,
-                                                                   flagsX,
+            # Error detected but no flag triggered:
+            # re-measure only Z stabilizers
+            elif corrZ.count('E') > 0 and flagsZ.count(1) == 0:
+                output_run = self.run_one_type_stabilizers_high_indet(18,
+                                                                tuple(flagsX),
+                                                                error_det,
+                                                                change_error_det)
+                corrZ2, flagsZ2, error_det, subcircs_i3 = output_run
+                subcircs_i += subcircs_i3[:]
+                final_corrX, final_corrZ = corrX[:], corrZ2[:]
+
+            # No error detected but flag triggered:
+            # re-measure the X stabilizers to identify the Z hook error
+            elif corrZ.count('E') == 0 and flagsZ.count(1) > 0:
+                output_run = self.run_one_type_stabilizers_high_indet(12,
+                                                                tuple(flagsZ),
+                                                                error_det,
+                                                                change_error_det)
+                corrX2, flagsX2, error_det, subcircs_i2 = output_run
+                subcircs_i += subcircs_i2[:]
+                final_corrX, final_corrZ = corrX2[:], corrZ[:]
+
+            # Error detected and flag triggered:
+            # re-measure the X stabilizers to correctly identify Z error
+            # re-measure the Z stabilizers to identify the X error.
+            else:
+                output_run = self.run_one_type_stabilizers_high_indet(12,
+                                                                tuple(flagsZ),
+                                                                error_det,
+                                                                change_error_det)
+                corrX2, flagsX2, error_det, subcircs_i2 = output_run
+                subcircs_i += subcircs_i2[:]
+                output_run = self.run_one_type_stabilizers_high_indet(18,
+                                                                   tuple(flagsX),
                                                                    error_det,
                                                                    change_error_det)
-            
-            elif corrZ.count('E') == 0 and flagsZ.count(1) > 0:
-                corrX2, flagsX2, error_det = self.run_one_type_stabilizers_high_indet(12,
-                                                                flagsZ,
-                                                                error_det,
-                                                                change_error_det)
+                corrZ2, flagsZ2, error_det, subcircs_i3 = output_run
+                subcircs_i += subcircs_i3[:]
+                final_corrX, final_corrZ = corrX2[:], corrZ2[:]
 
+
+        # Error detected but no flag triggered:
+        elif corrX.count('E') > 0 and flagsX.count(1) == 0:
+            
+            # Measure the Z stabilizers:
+            output_run = self.run_one_type_stabilizers_high_indet(6,
+                                                               tuple(flagsX),
+                                                               error_det,
+                                                               change_error_det)
+            corrZ, flagsZ, error_det, subcircs_i1 = output_run
+            subcircs_i += subcircs_i1[:]
+            # If the Z syndrome indicates an error, apply a Y correction based on
+            # this syndrome (not the X syndrome)
+            if corrZ.count(1) > 0:
+                final_corrX, final_corrZ = corrZ[:], corrZ[:]
+            # If not, then re-measure the X stabilizers to correctly identify the Z
+            # error
             else:
-                corrX2, flagsX2, error_det = self.run_one_type_stabilizers_high_indet(12,
-                                                                flagsZ,
+                output_run = self.run_one_type_stabilizers_high_indet(12,
+                                                                tuple(flagsZ),
                                                                 error_det,
                                                                 change_error_det)
+                corrX2, flagsX2, error_det, subcircs_i2 = output_run
+                subcircs_i += subcircs_i2[:] 
+                final_corrX, final_corrZ = corrX2[:], corrZ[:]
                 
 
+        # No error detected but flag triggered:
+        # measure the Z stabilizers to identify the X hook error 
+        elif corrX.count('E') == 0 and flagsX.count(1) > 0:
+            output_run = self.run_one_type_stabilizers_high_indet(6,
+                                                               tuple(flagsX),
+                                                               error_det,
+                                                               change_error_det)
+            corrZ, flagsZ, error_det, subcircs_i1 = output_run
+            subcircs_i += subcircs_i1
+            final_corrX, final_corrZ = corrX[:], corrZ[:] 
 
+
+        # Error detected and flag triggered
+        # measure the Z stabilizers to identify the X hook error
+        # measure the X stabilizers to correctly identify the Z error
         else:
-            print 'Adios'
+            output_run = self.run_one_type_stabilizers_high_indet(6,
+                                                               tuple(flagsX),
+                                                               error_det,
+                                                               change_error_det)
+            corrZ, flagsZ, error_det, subcircs_i1 = output_run
+            subcircs_i += subcircs_i1
+            output_run = self.run_one_type_stabilizers_high_indet(12,
+                                                                tuple(flagsZ),
+                                                                error_det,
+                                                                change_error_det)
+            corrX2, flagsX2, error_det, subcircs_i2 = output_run
+            subcircs_i += subcircs_i2
+            final_corrX, final_corrZ = corrX2[:], corrZ[:]
+            
+      
+        # Perform the correction on the final state
+        final_corrX = [oper if oper=='I' else 'Z' for oper in final_corrX]
+        final_corrZ = [oper if oper=='I' else 'X' for oper in final_corrZ]
 
-        return
+        self.stabs, self.destabs = qfun.update_stabs(self.stabs[:],
+                                                     self.destabs[:],
+                                                     final_corrX)
+        self.stabs, self.destabs = qfun.update_stabs(self.stabs[:],
+                                                     self.destabs[:],
+                                                     final_corrZ)
+
+        return subcircs_i
 
 
 
