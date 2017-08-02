@@ -978,8 +978,8 @@ class QEC_with_flags(Quantum_Operation):
 
     def run_one_type_stabilizers_high_indet_d5(self, index_first_subcirc,
                                                list_syndromesX, list_syndromesZ,
-                                               list_flagsX, list_flagsZ, n_QEC=0,
-                                               errors_det=0, stab_kind='X',
+                                               list_flagsX, list_flagsZ, 
+                                               n_QEC=0, errors_det=0,
                                                added_data_err_previous=False):
         '''
         Runs one of round of 8 X or 8 Z stabilizers for the 4.8.8 d-5 color code
@@ -1065,8 +1065,24 @@ class QEC_with_flags(Quantum_Operation):
         # is different from the last 2 syndromes, if no flags were triggered in the 2
         # previous steps and if no data error was detected on the previous step.
         # I'm sure we can refine it even further.
-        last_syndromeX, last_syndromeZ  = list_syndromesX[-1][:], list_syndromesZ[-1][:]
-        last_flagX, last_flagZ = list_flagsX[-1][:], list_flagsZ[-1][:]
+        if len(list_syndromesX) == 0:
+            last_syndromeX = [0 for i in range(8)]
+        else:
+            last_syndromeX = list_syndromesX[-1][:]
+        if len(list_syndromesZ) == 0:
+            last_syndromeZ = [0 for i in range(8)]
+        else:
+            last_syndromeZ = list_syndromesZ[-1][:]
+        
+        if len(list_flagsX) == 0:
+            last_flagX = [(0,0)] + [0 for i in range(7)]
+        else:
+            last_flagX = list_flagsX[-1][:]
+        if len(list_flagsZ) == 0:
+            last_flagZ = [(0,0)] + [0 for i in range(7)]
+        else:
+            last_flagZ = list_flagsZ[-1][:]
+
         sum_flagX = sum(last_flagX[0]) + sum(last_flagX[1:])
         sum_flagZ = sum(last_flagZ[0]) + sum(last_flagZ[1:])
         sum_current_flag = sum(flags[0]) + sum(flags[1:])
@@ -1079,14 +1095,84 @@ class QEC_with_flags(Quantum_Operation):
             errors_det += 1
             data_error_det = True
 
-        if stab_kind == 'X':
-            list_syndromesX += [syndromes]
-            list_flagsX += [flags]
-        elif stab_kind == 'Z':
-            list_syndromesZ += [syndromes]
-            list_flagsZ += [flags]
 
-        return list_syndromesX, list_syndromesZ, list_flagsX, list_flagsZ, subcircs_indices, errors_det, data_error_det
+        return syndromes, flags, subcircs_indices, errors_det, data_error_det
+
+
+    
+    def run_QEC_d5(self):
+        '''
+        Run the whole thing
+        '''
+        
+        list_syndromesX, list_syndromesZ = [], []
+        list_flagsX, list_flagsZ = [], []
+        list_sub_indices = []
+        n_QEC = 0
+        QEC_to_break = 8
+        decided_to_break = False
+        errors_det = 0
+        data_error_previous = False
+
+        for rep in range(4):
+        
+            # First X stabilizers
+            index_firstX = 32*rep
+            outputX = self.run_one_type_stabilizers_high_indet_d5(index_firstX,
+                                                                  list_syndromesX,
+                                                                  list_syndromesZ,
+                                                                  list_flagsX,
+                                                                  list_flagsZ,
+                                                                  n_QEC,
+                                                                  errors_det,
+                                                                  data_error_previous)
+            syndromeX, flagsX, sub_indices, errors_det, data_error_previous = outputX
+            list_syndromesX += [syndromeX]
+            list_flagsX += [flagsX]
+            list_sub_indices += sub_indices
+            n_QEC += 1
+
+            # Decide when to break
+            if n_QEC == QEC_to_break:  break
+            if not decided_to_break and errors_det >= 2:
+                decided_to_break = True
+                QEC_to_break = n_QEC + 2
+
+
+            # Then Z stabilizers
+            index_firstZ = 32*rep + 16
+            outputZ = self.run_one_type_stabilizers_high_indet_d5(index_firstX,
+                                                                  list_syndromesX,
+                                                                  list_syndromesZ,
+                                                                  list_flagsX,
+                                                                  list_flagsZ,
+                                                                  n_QEC,
+                                                                  errors_det,
+                                                                  data_error_previous)
+            syndromeZ, flagsZ, sub_indices, errors_det, data_error_previous = outputZ
+            list_syndromesZ += [syndromeZ]
+            list_flagsZ += [flagsZ]
+            list_sub_indices += sub_indices
+            n_QEC += 1
+
+            # Decide when to break
+            if n_QEC == QEC_to_break:  break
+            if not decided_to_break and errors_det >= 2:
+                decided_to_break = True
+                QEC_to_break = n_QEC + 2
+            
+            
+            # Extra conditions to break
+            if n_QEC == 2 and errors_det == 0:  break
+            elif n_QEC == 6 and errors_det == 1:  break
+            elif n_QEC == 8 and errors_det == 2:  break
+
+
+        # Combine or add the flags
+
+        # Now we need to perform the correction based on the last syndrome and the
+        # combined flags
+
 
 
 
