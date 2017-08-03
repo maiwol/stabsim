@@ -40,9 +40,11 @@ color_code_stabs = d5_stabs_good[:]
 errors_0 = [[]]
 errors_1 = [[i] for i in range(n_total)]
 errors_2 = []
-for i in range(n_total):
-    for j in range(i+1, n_total):
-        errors_2 += [[i,j]]
+for err2comb in it.combinations(range(n_total), 2):
+    errors_2 += [list(err2comb)]
+#for i in range(n_total):
+#    for j in range(i+1, n_total):
+#        errors_2 += [[i,j]]
 
 total_errors = errors_0 + errors_1 + errors_2
     
@@ -340,7 +342,7 @@ def all_hooks(sched_flags, flags=['f1'], err_weight=1, n_total=17):
 
     It returns a dictionary of flag triggering outcomes and hooks.
     '''
-    
+
     dict_hooks = {}
     for prod in it.product([0,1], repeat=len(flags)):
         dict_hooks[prod] = []
@@ -371,6 +373,8 @@ def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=color_
     # First we add the flags to the schedule
     sched_flags = sched_fun.add_flags_to_sched(sched_bare, flags)
 
+    #print 'sched flags =', sched_flags
+
     # Now we define the dictionary of lookup tables.
     # There's one lookup table for each flag combination
     lookups = {}
@@ -389,8 +393,11 @@ def all_lookups_one_schedule(sched_bare, flags=[[1,3]], n_total=17, stabs=color_
     # First we deal with the cases where we only had 1 error
     # on the ancilla
     dict_hooks = all_hooks(sched_flags, flag_names, 1)
+    #print dict_hooks
     for trig_comb in dict_hooks:
         for hook in dict_hooks[trig_comb]:
+            #print 'hook =', hook
+
             # for each hook we add all the possible w-1
             # errors on the data
             for data_err in errors_0 + errors_1:
@@ -827,6 +834,7 @@ def lookup_tables_for_set_schedules(sched_octagon, flags_octagon, schedules_sq, 
                                     n_total=17, stabs=d5_stabs_good):
 
     exists_oct, pre_lookup_oct = all_lookups_one_schedule(sched_octagon, flags_octagon)
+    
     final_lookups = {}
     for comb_trig in pre_lookup_oct:
         final_lookups[(comb_trig,)] = pre_lookup_oct[comb_trig]
@@ -860,9 +868,17 @@ for comb_trig in lookups:
     lookups_string_keys[str(comb_trig)] = lookups[comb_trig]
 
 
-print exist
-print scheds
-print len(lookups.keys())
+#print exist
+#print scheds
+#print len(lookups.keys())
+#for key in lookups.keys():
+#    print key
+#    print len(lookups[key])
+#    print lookups[key].keys()
+#    sys.exit(0)
+#sys.exit(0)
+
+'''
 lookups_filename = 'lookups_basic.json'
 lookups_file = open(lookups_filename, 'w')
 json.dump(lookups_string_keys, lookups_file)
@@ -971,7 +987,7 @@ json.dump(output_dict, outfile, indent=4, separators=(',', ':'),
 outfile.close()
 
 
-'''
+
 list_scheds = do_first_n_stabs(lookups_oct_list[:], sched_oct_list[:], [flags_oct],
                                d5_stabs[1:n_to_do], flags_sq, perms_important_sq[:],
                                scheds_per_round)
