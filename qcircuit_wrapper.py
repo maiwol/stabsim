@@ -1011,7 +1011,7 @@ class QEC_with_flags(Quantum_Operation):
                 i_subcirc = index_first_subcirc + 2*i + 1
                 out_dict = self.run_one_circ(i_subcirc)
                 syndromes += [out_dict.values()[0][0]]
-                if i_subcirc%8 == 0:
+                if i_subcirc%16 == 0 or i_subcirc%16 == 1:
                     flags += [(0,0)]
                 else:  
                     flags += [0]
@@ -1028,7 +1028,7 @@ class QEC_with_flags(Quantum_Operation):
                     i_subcirc = index_first_subcirc + 2*i + 1
                     out_dict = self.run_one_circ(i_subcirc)
                     syn = out_dict.values()[0][0]
-                    if i_subcirc%8 == 0:
+                    if i_subcirc%16 == 0 or i_subcirc%16 == 1:
                         flag = (0,0)
                     else:
                         flag = 0
@@ -1058,7 +1058,9 @@ class QEC_with_flags(Quantum_Operation):
 
                 syndromes += [syn]
                 subcircs_indices += [i_subcirc]
-        
+       
+        print 'Syndromes =', syndromes
+        print 'Flags =', flags
 
         # If a new data errror was detected by the stabilizers, add 1 to errors_det
         # We have to be very careful (conservative).  We only add 1 if the syndrome
@@ -1117,6 +1119,8 @@ class QEC_with_flags(Quantum_Operation):
         for rep in range(4):
         
             # First X stabilizers
+            print 'X stabs %i' %rep
+            #print 'stabs before =', self.stabs
             index_firstX = 32*rep
             outputX = self.run_one_type_stabilizers_high_indet_d5(index_firstX,
                                                                   list_syndromesX,
@@ -1131,6 +1135,10 @@ class QEC_with_flags(Quantum_Operation):
             list_flagsX += [flagsX]
             list_sub_indices += sub_indices
             n_QEC += 1
+            
+            #print 'stabs after =', self.stabs
+
+            print 'Errors detected so far =', errors_det
 
             # Decide when to break
             if n_QEC == QEC_to_break:  break
@@ -1140,8 +1148,10 @@ class QEC_with_flags(Quantum_Operation):
 
 
             # Then Z stabilizers
+            print 'Z stabs %i' %rep
+            #print 'stabs before =', self.stabs
             index_firstZ = 32*rep + 16
-            outputZ = self.run_one_type_stabilizers_high_indet_d5(index_firstX,
+            outputZ = self.run_one_type_stabilizers_high_indet_d5(index_firstZ,
                                                                   list_syndromesX,
                                                                   list_syndromesZ,
                                                                   list_flagsX,
@@ -1154,6 +1164,10 @@ class QEC_with_flags(Quantum_Operation):
             list_flagsZ += [flagsZ]
             list_sub_indices += sub_indices
             n_QEC += 1
+            
+            #print 'stabs after =', self.stabs
+            
+            print 'Errors detected so far =', errors_det
 
             # Decide when to break
             if n_QEC == QEC_to_break:  break
@@ -1167,6 +1181,14 @@ class QEC_with_flags(Quantum_Operation):
             elif n_QEC == 6 and errors_det == 1:  break
             elif n_QEC == 8 and errors_det == 2:  break
 
+
+        print 'n_QEC = ', n_QEC
+        print 'X syndromes =', list_syndromesX
+        print 'Z syndromes =', list_syndromesZ
+        print 'X flags =', list_flagsX
+        print 'Z flags =', list_flagsZ
+        print list_sub_indices
+        sys.exit(0)
 
         # Combine or add the flags
 
