@@ -1022,7 +1022,7 @@ class QEC_with_flags(Quantum_Operation):
             #stab_light = False
             for i in range(8):
                
-                print errors_det
+                #print errors_det
 
                 if errors_det >= 2:
                     i_subcirc = index_first_subcirc + 2*i + 1
@@ -1059,8 +1059,8 @@ class QEC_with_flags(Quantum_Operation):
                 syndromes += [syn]
                 subcircs_indices += [i_subcirc]
        
-        print 'Syndromes =', syndromes
-        print 'Flags =', flags
+        #print 'Syndromes =', syndromes
+        #print 'Flags =', flags
 
         # If a new data errror was detected by the stabilizers, add 1 to errors_det
         # We have to be very careful (conservative).  We only add 1 if the syndrome
@@ -1119,7 +1119,7 @@ class QEC_with_flags(Quantum_Operation):
         for rep in range(4):
         
             # First X stabilizers
-            print 'X stabs %i' %rep
+            #print 'X stabs %i' %rep
             #print 'stabs before =', self.stabs
             index_firstX = 32*rep
             outputX = self.run_one_type_stabilizers_high_indet_d5(index_firstX,
@@ -1138,7 +1138,7 @@ class QEC_with_flags(Quantum_Operation):
             
             #print 'stabs after =', self.stabs
 
-            print 'Errors detected so far =', errors_det
+            #print 'Errors detected so far =', errors_det
 
             # Decide when to break
             if n_QEC == QEC_to_break:  break
@@ -1148,7 +1148,7 @@ class QEC_with_flags(Quantum_Operation):
 
 
             # Then Z stabilizers
-            print 'Z stabs %i' %rep
+            #print 'Z stabs %i' %rep
             #print 'stabs before =', self.stabs
             index_firstZ = 32*rep + 16
             outputZ = self.run_one_type_stabilizers_high_indet_d5(index_firstZ,
@@ -1167,7 +1167,7 @@ class QEC_with_flags(Quantum_Operation):
             
             #print 'stabs after =', self.stabs
             
-            print 'Errors detected so far =', errors_det
+            #print 'Errors detected so far =', errors_det
 
             # Decide when to break
             if n_QEC == QEC_to_break:  break
@@ -1182,20 +1182,41 @@ class QEC_with_flags(Quantum_Operation):
             elif n_QEC == 8 and errors_det == 2:  break
 
 
-        print 'n_QEC = ', n_QEC
-        print 'X syndromes =', list_syndromesX
-        print 'Z syndromes =', list_syndromesZ
-        print 'X flags =', list_flagsX
-        print 'Z flags =', list_flagsZ
-        print list_sub_indices
-        sys.exit(0)
+        #print 'n_QEC = ', n_QEC
+        #print 'X syndromes =', list_syndromesX
+        #print 'Z syndromes =', list_syndromesZ
+        #print 'X flags =', list_flagsX
+        #print 'Z flags =', list_flagsZ
+        #print list_sub_indices
+        #sys.exit(0)
 
         # Combine or add the flags
+        combined_flagsX = qfun.combine_flags(list_flagsX)
+        combined_flagsZ = qfun.combine_flags(list_flagsZ)
 
-        # Now we need to perform the correction based on the last syndrome and the
-        # combined flags
+        # Take last syndromes to be the "correct" ones
+        last_syndromeX = ''.join(map(str,list_syndromesX[-1]))
+        last_syndromeZ = ''.join(map(str,list_syndromesZ[-1]))
 
+        # Read the correction from the lookup tables.
+        d5_lookups = d5color.Code.all_lookups
+        # correction of X errors uses flagsX and syndromeZ
+        corrX = d5_lookups[combined_flagsX][last_syndromeZ]
+        # correction of Z errors viceversa
+        corrZ = d5_lookups[combined_flagsZ][last_syndromeX]
 
+        # Perform the correction on the final state
+        final_corrX = ['I' if oper==0 else 'Z' for oper in corrX]
+        final_corrZ = ['I' if oper==0 else 'X' for oper in corrZ]
+
+        self.stabs, self.destabs = qfun.update_stabs(self.stabs[:],
+                                                     self.destabs[:],
+                                                     final_corrX)
+        self.stabs, self.destabs = qfun.update_stabs(self.stabs[:],
+                                                     self.destabs[:],
+                                                     final_corrZ)
+
+        return list_sub_indices
 
 
 

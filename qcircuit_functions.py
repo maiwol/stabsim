@@ -5,12 +5,44 @@ import circuit as c
 import cross
 import steane
 import fivequbit
+import surface17 as surf17
 import d5color
 import correction as cor
 from visualizer import browser_vis as brow
 import schedules_d5
 
 QEC_lookuptable = schedules_d5.lookups
+
+
+
+
+def combine_flags(flag_list):
+    '''
+    Takes in a list of flags (for several rounds of QEC) and adds them
+    to return the total flags.  It returs a string to later be used as
+    a key in the lookup table.      
+    We assume that the first flag is always the octagon, so it has two digits.
+    '''
+
+    new_flag_list = []
+    for flag_outcome in flag_list:
+        new_flag_outcome = [flag_outcome[0][0], flag_outcome[0][1]]
+        new_flag_outcome += flag_outcome[1:]
+        new_flag_list += [new_flag_outcome]
+
+    n_flags = len(new_flag_list[0])
+    combined_flags = []
+    for i in range(n_flags):
+        combined_flag = 0
+        for new_flag_outcome in new_flag_list:
+            combined_flag += new_flag_outcome[i]
+        combined_flag %= 2
+        combined_flags += [combined_flag]
+
+    combined_flags_string = ''.join(map(str,combined_flags))
+
+    return combined_flags_string
+
 
 
 def get_syn_with_flags(out_dict,
@@ -405,7 +437,7 @@ def stabs_QEC_diVin(dic, n_first_anc, code, stab_kind=None,
 
 
 
-def stabs_QEC_bare_anc(dic, n_first_anc, code):
+def stabs_QEC_bare_anc(dic, n_first_anc, code, stab_kind='X'):
     '''
     After one round of either X or Z stabs (for a CSS code)
     or the whole set of stabs (for a non-CSS code),
@@ -435,7 +467,16 @@ def stabs_QEC_bare_anc(dic, n_first_anc, code):
         outcome = [dic[n_first_anc + i][0] for i in range(len_dic)]
         corr = code_class.stabilizer_syndrome_dict[tuple(outcome)]
        
-            
+    elif code == 'surface17':
+        n_q = 9
+        len_dic = 4
+        code_class = surf17.Code
+        corr_kind = stab_kind + 'stabs'
+
+        outcome = [dic[n_first_anc + i][0] for i in range(len_dic)]
+        outcome_string = ''.join(map(str,outcome))
+        qubits_corr = code_class.lookuptable[corr_kind][outcome_string]
+        corr = ['E' if i in qubits_corr else 'I' for i in range(n_q)]
 
     if len(dic) != len_dic:
         raise IndexError('The dict does not have the right length.')

@@ -355,7 +355,8 @@ class Flag_Correct:
 
     @classmethod
     def generate_one_flagged_stab(cls, i_first_anc, stabilizer, flags, 
-                                  meas_errors, Is_after_two, to_ancilla):
+                                  meas_errors, Is_after_two, to_ancilla,
+                                  initial_I=False):
         '''
         '''
 
@@ -364,6 +365,10 @@ class Flag_Correct:
         coupling_gate = 'C'+Pauli_oper
 
         stab_circ = Circuit()
+        if initial_I:
+            for i in range(i_first_anc):
+                stab_circ.add_gate_at([i], 'I')
+
         stab_circ.add_gate_at([i_first_anc], 'PrepareXPlus')
         for i in range(n_flags):
             stab_circ.add_gate_at([i_first_anc+i+1], 'PrepareZPlus')
@@ -396,6 +401,7 @@ class Flag_Correct:
         return stab_circ
 
 
+
     @classmethod
     def generate_all_flagged_stabs(cls, stabilizer_list, flags_list,
                                    meas_errors, Is_after_two, n_data):
@@ -418,21 +424,26 @@ class Flag_Correct:
         return stabs_circ
 
 
+
     @classmethod
     def generate_high_indeterminacy_circuit(cls, stabilizer_list, flags_list,
-                                            meas_errors, Is_after_two, n_data):
+                                            meas_errors, Is_after_two, n_data,
+                                            initial_I=False):
         '''
         '''
 
         stabs_circ = Circuit()
         for i in range(len(stabilizer_list)):
-            
+            local_initial_I = False
+            if i==0 and initial_I:  local_initial_I = True
+
             circ_flag = Flag_Correct.generate_one_flagged_stab(n_data,
                                                             stabilizer_list[i],
                                                             flags_list[i],
                                                             meas_errors,
                                                             Is_after_two,
-                                                            True)
+                                                            True,
+                                                            local_initial_I)
             circ_flag = Encoded_Gate('S%i_flag'%i, [circ_flag]).circuit_wrap()
             
             circ_bare = Flag_Correct.generate_one_flagged_stab(n_data,
@@ -453,7 +464,7 @@ class Flag_Correct:
     @classmethod
     def generate_whole_QEC_circ(cls, n_rep, stabilizer_list, flags_list,
                                 meas_errors, Is_after_two, n_data,
-                                group_reps=False, high_indet=False):
+                                initial_I, group_reps=False, high_indet=False):
         '''
         '''
 
@@ -472,13 +483,13 @@ class Flag_Correct:
 
         complete_circ = Circuit()
         for rep_i in range(n_rep):
-            
-            circ1 = circ_function(stabs1, flags1, meas_errors, Is_after_two, n_data)
-            
+            local_initial_I = False
+            if rep_i == 0 and initial_I:  local_initial_I = True
+
+            circ1 = circ_function(stabs1, flags1, meas_errors, Is_after_two, n_data,
+                                  local_initial_I)
             circ2 = circ_function(stabs2, flags2, meas_errors, Is_after_two, n_data)
-            
             circ1 = Encoded_Gate('Stabilizers_X%i'%rep_i, [circ1]).circuit_wrap()
-            
             circ2 = Encoded_Gate('Stabilizers_Z%i'%rep_i, [circ2]).circuit_wrap()
             circ1.join_circuit(circ2)
             
@@ -546,10 +557,12 @@ class Bare_Correct:
     @classmethod
     def generate_rep_bare_meas(cls, n_data, stabilizer_list, n_rounds, input_I_round, 
                                meas_errors, Is_after_two_qubit, initial_trans=False,
-                               ancilla_parallel=False):
+                               ancilla_parallel=False, CSS=False):
         '''
         Is_after_two_qubits:  whether or not we want to add Is after 2-qubit gates,
                               to add errors on the Cross code.
+        CSS:  if True, we divide the stabilizers into two groups which we measure
+              separately.
         '''
         n = n_data
         n_ancilla = len(stabilizer_list)
@@ -557,13 +570,32 @@ class Bare_Correct:
         i_I = input_I_round
         m_e = meas_errors
         i_t = Is_after_two_qubit
+        bare_meas_circ = Bare_Correct.generate_bare_meas
         rep_meas_circ = Circuit()
+
+
+        # New part I added to run the surface-17 code MGA: 07/30/17.
+        if CSS:
+            n_stab = len(s_l)/2
+            for i in range(n_rounds):
+                if i == 0: i_I_local = i_I
+                else:      i_I_local = False
+                gate_nameX = 'SX_%i'%i
+                stab_circX = bare_meas_circ(n, s_l[:n_stab], i_I_local, m_e, i_t)
+                stab_circX = Encoded_Gate(gate_nameX, [stab_circX]).circuit_wrap()
+                gate_nameZ = 'SZ_%i'%i
+                stab_circZ = bare_meas_circ(n, s_l[n_stab:], False, m_e, i_t)
+                stab_circZ = Encoded_Gate(gate_nameZ, [stab_circZ]).circuit_wrap()
+                rep_meas_circ.join_circuit(stab_circX, ancilla_parallel)
+                rep_meas_circ.join_circuit(stab_circZ, ancilla_parallel)
+
+            return rep_meas_circ
+        #######################################################
+
 
         if initial_trans != False:
             for i in range(n_data):
                 rep_meas_circ.add_gate_at([i], initial_trans)
-
-        bare_meas_circ = Bare_Correct.generate_bare_meas
 
         for i in range(n_rounds):
             gate_name = 'Bare_Measurement_'+str(i+1)
@@ -581,6 +613,15 @@ class Bare_Correct:
         #sys.exit(0)
 
         return rep_meas_circ
+
+
+
+    @classmethod
+    def generate_rep_bare_meas_CSS(cls, n_data, stabilizer_list, n_rounds, initial_I, meas_errors,
+                                   Is_after_twoq=False, initial_trans=False, anc_parallel=False):
+        '''
+        '''
+        
 
 
 

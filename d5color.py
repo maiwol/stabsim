@@ -38,7 +38,7 @@ class Code:
 
 
     stabilizer_CHP_X = [
-                        '+XXXXIIIIIIIIIIIII'
+                        '+XXXXIIIIIIIIIIIII',
                         '+IXIXXXIIIIIIIIIII',
                         '+IIXXXIIIIXIIIXIII',
                         '+IIIIXXIIXXIIIIIII',
@@ -77,3 +77,33 @@ class Code:
                             '+IIIIIIXIIIXIIIIII'
                           ]
 
+
+    stabilizer_alt = [
+                        [('X',2),('X',3),('X',6),('X',5),('X',9),('X',10),('X',14),('X',13)],
+                        [('X',0),('X',1),('X',2),('X',3)],
+                        [('X',0),('X',2),('X',4),('X',5)],
+                        [('X',4),('X',5),('X',8),('X',9)],
+                        [('X',8),('X',9),('X',12),('X',13)],
+                        [('X',6),('X',7),('X',10),('X',11)],
+                        [('X',10),('X',11),('X',14),('X',15)],
+                        [('X',7),('X',11),('X',15),('X',16)],
+                        [('Z',2),('Z',3),('Z',6),('Z',5),('Z',9),('Z',10),('Z',14),('Z',13)],
+                        [('Z',0),('Z',1),('Z',2),('Z',3)],
+                        [('Z',0),('Z',2),('Z',4),('Z',5)],
+                        [('Z',4),('Z',5),('Z',8),('Z',9)],
+                        [('Z',8),('Z',9),('Z',12),('Z',13)],
+                        [('Z',6),('Z',7),('Z',10),('Z',11)],
+                        [('Z',10),('Z',11),('Z',14),('Z',15)],
+                        [('Z',7),('Z',11),('Z',15),('Z',16)]
+                     ]
+
+
+    lookup_folder = './color_code_with_flags/lookup_tables_color_d5/'
+    lookup_filenames = os.listdir(lookup_folder)
+    all_lookups = {}
+    for lookup_filename in lookup_filenames:
+        total_filename = lookup_folder + lookup_filename
+        lookup_file = open(total_filename, 'r')
+        lookup_dict = json.load(lookup_file)
+        lookup_file.close()
+        all_lookups[lookup_filename[:-5]] = lookup_dict
