@@ -20,6 +20,8 @@ import scipy.misc
 import random as rd
 import time as t
 import MLD
+import qcircuit_functions as qfun
+
 
 
 def combine_stabilizers(data_stabs, data_destabs, anc_stabs, anc_destabs):
@@ -2806,7 +2808,8 @@ def add_errors_fast_sampler(gate_indices, n_errors, subcircs, error_info):
 
 
 
-def add_errors_fast_sampler_Reich(gate_indices, n_errors, subcircs, error_info):
+def add_errors_fast_sampler_new(gate_indices, n_errors, subcircs, error_info,
+                                fraction_of_circ=3):
     '''
     '''
     sampling = 'Muyalon'
@@ -2816,7 +2819,7 @@ def add_errors_fast_sampler_Reich(gate_indices, n_errors, subcircs, error_info):
     # get list of indices for one qubit gates and two qubit gates
     one_q_gates = gate_indices[0]
     two_q_gates = gate_indices[1]
-    
+
     # shuffle the gate indices
     rd.shuffle(one_q_gates)
     rd.shuffle(two_q_gates)
@@ -2825,7 +2828,7 @@ def add_errors_fast_sampler_Reich(gate_indices, n_errors, subcircs, error_info):
     #print "selected one qubit gates are", selected_one_q_gates
     selected_two_q_gates = two_q_gates[ : n_errors[1]]
     #print "selected two qubit gates are", selected_two_q_gates
- 
+
     carry_run = False   
     faulty_subcircs = []
     errors_dict = {}
@@ -2850,12 +2853,122 @@ def add_errors_fast_sampler_Reich(gate_indices, n_errors, subcircs, error_info):
         faulty_subcircs += [subcirc]
         
         subcirc_dict, local_carry_run = get_errors_dict(subcirc)
-        if i >= int(n_subcircs/2): 
+        if i >= int(2*n_subcircs/fraction_of_circ): 
             local_carry_run = False
         carry_run = carry_run or local_carry_run
         errors_dict[i] = subcirc_dict
 
     return errors_dict, carry_run, faulty_subcircs
+
+
+
+def add_errors_fast_sampler_color(gate_indices, n_errors, subcircs, error_info):
+    '''
+    '''
+    sampling = 'Muyalon'
+    n_subcircs = len(subcircs) 
+
+    # get list of indices for one qubit gates and two qubit gates
+    one_q_gates = gate_indices[0]
+    two_q_gates = gate_indices[1]
+
+    # shuffle the gate indices
+    rd.shuffle(one_q_gates)
+    rd.shuffle(two_q_gates)
+
+    selected_one_q_gates = one_q_gates[ : n_errors[0]]
+    sorted_one_q_gates = sorted(selected_one_q_gates, key=lambda gate: gate[0])
+    selected_two_q_gates = two_q_gates[ : n_errors[1]]
+    sorted_two_q_gates = sorted(selected_two_q_gates, key=lambda gate: gate[0])
+
+
+    if n_errors[0] > 0:
+        subcirc_one_q_gates_indices = [gate[0] for gate in sorted_one_q_gates]      
+    else:
+        subcirc_one_q_gates_indices = [33]
+
+    if n_errors[1] > 0:
+        subcirc_two_q_gates_indices = [gate[0] for gate in sorted_two_q_gates]
+    else:
+        subcirc_two_q_gates_indices = [33]
+
+    
+    #print sorted_one_q_gates, sorted_two_q_gates
+    #print subcirc_one_q_gates_indices, subcirc_two_q_gates_indices
+    #sys.exit(0)
+
+    if subcirc_one_q_gates_indices[0] > 31 and subcirc_two_q_gates_indices[0] > 31:
+        return {}, False, None
+
+    
+    all_subcircs_odd = True
+    for subcirc in subcirc_one_q_gates_indices + subcirc_two_q_gates_indices:
+        if subcirc%2 == 0:
+            all_subcircs_odd = False
+            break
+
+    if all_subcircs_odd:
+        return {}, False, None
+    
+
+    carry_run = True
+    faulty_subcircs = []
+    errors_dict = {}
+    for i in range(n_subcircs):
+        subcirc = subcircs[i]
+        # local gates are the gates that we are adding errors after
+        local_gates = []
+
+        for pair in selected_one_q_gates:
+            if i == pair[0]: 
+                # the selected gate must be in the current redundency subcircuit
+                local_gates += [pair[1]]
+
+        for pair in selected_two_q_gates:
+            if i == pair[0]:
+                local_gates += [pair[1]]
+
+        if len(local_gates) != 0:           
+            # if no gates selected at all, then no need to perform the add error step at all
+	        error.add_error_alternative(subcirc, error_info, sampling, local_gates)
+
+        faulty_subcircs += [subcirc]
+        
+        #subcirc_dict, local_carry_run = get_errors_dict(subcirc)
+        #if i >= int(2*n_subcircs/fraction_of_circ): 
+        #    local_carry_run = False
+        #carry_run = carry_run or local_carry_run
+        #errors_dict[i] = subcirc_dict
+
+    return errors_dict, carry_run, faulty_subcircs
+
+
+
+def add_specific_error_configuration(circ_list, errors_to_add, gate_indexes):
+    '''
+    '''
+    if len(errors_to_add) != len(gate_indexes):
+        raise ValueError('The errors and the gates cannot have different length')
+
+    #print 'Indexes =', gate_indexes
+    #print 'Errors =', errors_to_add
+    #print gate_indexes[0][0]
+
+    faulty_circ_list = []
+    for subcirc_i in range(len(circ_list)):
+        faulty_circ = circ_list[subcirc_i]
+        local_gates, local_errors = [], []
+        for gate_i in range(len(gate_indexes)):
+            if subcirc_i == gate_indexes[gate_i][0]:
+                local_gates += [gate_indexes[gate_i][1]]
+                local_errors += [errors_to_add[gate_i]]
+        
+        if len(local_gates) != 0:
+            qfun.add_errors_after_gates(faulty_circ, local_gates, local_errors)
+
+        faulty_circ_list += [faulty_circ]
+
+    return faulty_circ_list
 
 
 

@@ -1194,6 +1194,9 @@ class QEC_with_flags(Quantum_Operation):
         combined_flagsX = qfun.combine_flags(list_flagsX)
         combined_flagsZ = qfun.combine_flags(list_flagsZ)
 
+        #print 'X flags combined =', combined_flagsX
+        #print 'Z flags combined =', combined_flagsZ
+
         # Take last syndromes to be the "correct" ones
         last_syndromeX = ''.join(map(str,list_syndromesX[-1]))
         last_syndromeZ = ''.join(map(str,list_syndromesZ[-1]))
@@ -1205,9 +1208,12 @@ class QEC_with_flags(Quantum_Operation):
         # correction of Z errors viceversa
         corrZ = d5_lookups[combined_flagsZ][last_syndromeX]
 
+        #print 'corrX =', corrX
+        #print 'corrZ =', corrZ
+
         # Perform the correction on the final state
-        final_corrX = ['I' if oper==0 else 'Z' for oper in corrX]
-        final_corrZ = ['I' if oper==0 else 'X' for oper in corrZ]
+        final_corrX = ['I' if oper==0 else 'X' for oper in corrX]
+        final_corrZ = ['I' if oper==0 else 'Z' for oper in corrZ]
 
         self.stabs, self.destabs = qfun.update_stabs(self.stabs[:],
                                                      self.destabs[:],

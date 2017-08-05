@@ -152,7 +152,7 @@ def exhaustive_search_subset(subset, one_q_gates, two_q_gates,
         #brow.from_circuit(faulty_circ_list[0], True)
         #time.sleep(5)
 
-        final_error, fail, n_supra = run_QEC_d5(init_state, QEC_circ_list)
+        final_error, fail, n_supra = run_QEC_d5(init_state, faulty_circ_list)
         if final_error:
             final_error_count += 1
         if fail:
@@ -181,32 +181,39 @@ def run_several_QEC_fast(error_info, n_runs_total, init_state, QEC_circ_list):
             QEC_circ_list_copy += [copy.deepcopy(subcirc)]
 
         # Add the errors and decide to run (in this case we'll always run)
-        errors_dict, carry_run, faulty_circs = wrapper.add_errors_fast_sampler_new(
+        errors_dict, carry_run, faulty_circs = wrapper.add_errors_fast_sampler_color(
                                                                 [one_q_gates, two_q_gates],
                                                                 n_errors,
                                                                 QEC_circ_list_copy,
                                                                 error_info)
 
-        # Run
-        did_run += 1
-        final_error, fail, supra_local = run_QEC_d5(init_state, QEC_circ_list)
-        n_supra_gates += len(supra_local)
-        for num in supra_local:
-            if num%16 == 0:
-                even_supra8 += 1
-            elif num%16 == 1:
-                odd_supra8 += 1
-            elif num%2 == 0:
-                even_supra += 1
-            else:
-                odd_supra += 1
 
-        if final_error:
-            n_final_errors += 1
-        if fail:
-            n_fails += 1
+        if not carry_run:
+            n_supra_gates += 32
+            even_supra8 += 2
+            even_supra += 14
 
-    return n_final_errors, n_fails, n_supra_gates, even_supra, odd_supra, even_supra8, odd_supra8
+        else:
+            # Run
+            did_run += 1
+            final_error, fail, supra_local = run_QEC_d5(init_state, faulty_circs)
+            n_supra_gates += len(supra_local)
+            for num in supra_local:
+                if num%16 == 0:
+                    even_supra8 += 1
+                elif num%16 == 1:
+                    odd_supra8 += 1
+                elif num%2 == 0:
+                    even_supra += 1
+                else:
+                    odd_supra += 1
+
+            if final_error:
+                n_final_errors += 1
+            if fail:
+                n_fails += 1
+
+    return n_final_errors, n_fails, n_supra_gates, even_supra, odd_supra, even_supra8, odd_supra8, did_run
 
 
 
@@ -225,6 +232,8 @@ def run_parallel_QEC(error_info, n_runs_per_proc, n_proc, init_state, QEC_circ_l
     return dicts
 
 
+
+#print run_several_QEC_fast(error_info, 10, init_state, QEC_circ_list)
 out_list = run_parallel_QEC(error_info, n_per_proc, n_proc, init_state,
                             QEC_circ_list)
 n_total = n_per_proc*n_proc
@@ -235,6 +244,7 @@ n_even_gates = sum([event[3] for event in out_list])
 n_odd_gates = sum([event[4] for event in out_list])
 n_even8_gates = sum([event[5] for event in out_list])
 n_odd8_gates = sum([event[6] for event in out_list])
+n_run = sum([event[7] for event in out_list])
 
 n_twoq_gates = n_even8_gates*n_2q_gates[0] + n_odd8_gates*n_2q_gates[1] + n_even_gates*n_2q_gates[2] + n_odd_gates*n_2q_gates[3]
 n_oneq_gates = n_even8_gates*n_1q_gates[0] + n_odd8_gates*n_1q_gates[1] + n_even_gates*n_1q_gates[2] + n_odd_gates*n_1q_gates[3]
@@ -251,6 +261,7 @@ p_odd8_supra = float(n_odd8_gates)/float(n_total)
 p_2q_gates = float(n_twoq_gates)/float(n_total)
 p_1q_gates = float(n_oneq_gates)/float(n_total)
 p_meas = float(n_meas_gates)/float(n_total)
+p_run = float(n_run)/float(n_total)
 out_dict = {'n_total': n_total,
             'n_correctable': n_correctable,
             'p_correctable': p_correctable,
@@ -264,7 +275,9 @@ out_dict = {'n_total': n_total,
             'p_odd8_supra': p_odd8_supra,
             'p_2q': p_2q_gates,
             'p_1q': p_1q_gates,
-            'p_meas': p_meas}
+            'p_meas': p_meas,
+            'n_run': n_run,
+            'p_run': p_run}
 
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
