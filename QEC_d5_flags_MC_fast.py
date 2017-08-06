@@ -176,15 +176,18 @@ def run_several_QEC_fast(error_info, n_runs_total, init_state, QEC_circ_list):
 
     for n_run in xrange(n_runs_total):
 
-        QEC_circ_list_copy = []
-        for subcirc in QEC_circ_list:
-            QEC_circ_list_copy += [copy.deepcopy(subcirc)]
+        # I just realized it's more efficient to copy the circuit list
+        # only if we decide to run the circuit.
+        # Instead, we perform the copying process in add_errors...
+        #QEC_circ_list_copy = []
+        #for subcirc in QEC_circ_list:
+        #    QEC_circ_list_copy += [copy.deepcopy(subcirc)]
 
         # Add the errors and decide to run (in this case we'll always run)
         errors_dict, carry_run, faulty_circs = wrapper.add_errors_fast_sampler_color(
                                                                 [one_q_gates, two_q_gates],
                                                                 n_errors,
-                                                                QEC_circ_list_copy,
+                                                                QEC_circ_list,
                                                                 error_info)
 
 
@@ -212,6 +215,15 @@ def run_several_QEC_fast(error_info, n_runs_total, init_state, QEC_circ_list):
                 n_final_errors += 1
             if fail:
                 n_fails += 1
+                print 'Selected 1q gates =', errors_dict[0]
+                print 'Selected 2q gates =', errors_dict[1]
+                print supra_local
+                for faulty_circ in faulty_circs:
+                    for gate in faulty_circ.gates:
+                        if gate.is_error:
+                            print gate.gate_name, gate.qubits
+                
+
 
     return n_final_errors, n_fails, n_supra_gates, even_supra, odd_supra, even_supra8, odd_supra8, did_run
 
@@ -223,7 +235,7 @@ def run_parallel_QEC(error_info, n_runs_per_proc, n_proc, init_state, QEC_circ_l
     sim_func = run_several_QEC_fast
     pool = mp.Pool()
     results = [pool.apply_async(sim_func, (error_info, n_runs_per_proc,
-                                           init_state, QEC_circ_list[:]))
+                                           init_state, QEC_circ_list))
                             for proc in range(n_proc)]
     pool.close()
     pool.join()
@@ -233,7 +245,8 @@ def run_parallel_QEC(error_info, n_runs_per_proc, n_proc, init_state, QEC_circ_l
 
 
 
-#print run_several_QEC_fast(error_info, 10, init_state, QEC_circ_list)
+#print run_several_QEC_fast(error_info, 50000, init_state, QEC_circ_list)
+#sys.exit(0)
 out_list = run_parallel_QEC(error_info, n_per_proc, n_proc, init_state,
                             QEC_circ_list)
 n_total = n_per_proc*n_proc

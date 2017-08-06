@@ -2892,30 +2892,45 @@ def add_errors_fast_sampler_color(gate_indices, n_errors, subcircs, error_info):
     else:
         subcirc_two_q_gates_indices = [33]
 
-    
     #print sorted_one_q_gates, sorted_two_q_gates
     #print subcirc_one_q_gates_indices, subcirc_two_q_gates_indices
-    #sys.exit(0)
-
-    if subcirc_one_q_gates_indices[0] > 31 and subcirc_two_q_gates_indices[0] > 31:
-        return {}, False, None
-
     
-    all_subcircs_odd = True
-    for subcirc in subcirc_one_q_gates_indices + subcirc_two_q_gates_indices:
-        if subcirc%2 == 0:
-            all_subcircs_odd = False
+    total_indices = subcirc_one_q_gates_indices + subcirc_two_q_gates_indices
+    sorted_total_indices = sorted(total_indices)
+    
+    #print sorted_total_indices
+
+    first_even_index = 128
+    for index in sorted_total_indices:
+        if index%2 == 0:
+            first_even_index = index
             break
 
-    if all_subcircs_odd:
-        return {}, False, None
+    #print first_even_index
+
+    if first_even_index > 31:
+        return [selected_one_q_gates, selected_two_q_gates], False, None
+
+
+    #if subcirc_one_q_gates_indices[0] > 31 and subcirc_two_q_gates_indices[0] > 31:
+    #    return {}, False, None
+
+    #all_subcircs_odd = True
+    #for subcirc in subcirc_one_q_gates_indices + subcirc_two_q_gates_indices:
+    #    if subcirc%2 == 0:
+    #        all_subcircs_odd = False
+    #        break
+
+    #if all_subcircs_odd:
+    #    return {}, False, None
     
 
     carry_run = True
     faulty_subcircs = []
     errors_dict = {}
     for i in range(n_subcircs):
-        subcirc = subcircs[i]
+        subcirc = copy.deepcopy(subcircs[i])
+        #subcirc = subcircs[i]
         # local gates are the gates that we are adding errors after
         local_gates = []
 
@@ -2940,7 +2955,8 @@ def add_errors_fast_sampler_color(gate_indices, n_errors, subcircs, error_info):
         #carry_run = carry_run or local_carry_run
         #errors_dict[i] = subcirc_dict
 
-    return errors_dict, carry_run, faulty_subcircs
+    #return errors_dict, carry_run, faulty_subcircs
+    return [selected_one_q_gates, selected_two_q_gates], carry_run, faulty_subcircs
 
 
 

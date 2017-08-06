@@ -980,7 +980,7 @@ class QEC_with_flags(Quantum_Operation):
                                                list_syndromesX, list_syndromesZ,
                                                list_flagsX, list_flagsZ, 
                                                n_QEC=0, errors_det=0,
-                                               added_data_err_previous=False):
+                                               added_data_err_previous=[False,False]):
         '''
         Runs one of round of 8 X or 8 Z stabilizers for the 4.8.8 d-5 color code
         with high indeterminancy.
@@ -1000,7 +1000,7 @@ class QEC_with_flags(Quantum_Operation):
         (5) errors_det:     the number of errors detected so far. It it's larger than
                             or equal to 2 we don't use flags.
         (6) added_data_err_previous:  whether a data error was detected on the previous
-                                      step.
+                                      2 steps.
         '''
 
         syndromes, flags, subcircs_indices = [], [], []
@@ -1093,7 +1093,8 @@ class QEC_with_flags(Quantum_Operation):
         data_error_det = False
         syn_clause = (syndromes != last_syndromeX) and (syndromes != last_syndromeZ)
         flag_clause = (sum_flagX == 0) and (sum_flagZ == 0) and (sum_current_flag == 0)
-        if (syn_clause) and (flag_clause) and (not added_data_err_previous):
+        data_err_clause = (not added_data_err_previous[0]) and (not added_data_err_previous[1])
+        if (syn_clause) and (flag_clause) and (data_err_clause):
             errors_det += 1
             data_error_det = True
 
@@ -1114,7 +1115,7 @@ class QEC_with_flags(Quantum_Operation):
         QEC_to_break = 8
         decided_to_break = False
         errors_det = 0
-        data_error_previous = False
+        data_error_previous_list = [False,False]
 
         for rep in range(4):
         
@@ -1129,13 +1130,14 @@ class QEC_with_flags(Quantum_Operation):
                                                                   list_flagsZ,
                                                                   n_QEC,
                                                                   errors_det,
-                                                                  data_error_previous)
+                                                                  data_error_previous_list)
             syndromeX, flagsX, sub_indices, errors_det, data_error_previous = outputX
             list_syndromesX += [syndromeX]
             list_flagsX += [flagsX]
             list_sub_indices += sub_indices
             n_QEC += 1
-            
+            data_error_previous_list = [data_error_previous_list[1], data_error_previous]
+
             #print 'stabs after =', self.stabs
 
             #print 'Errors detected so far =', errors_det
@@ -1158,12 +1160,13 @@ class QEC_with_flags(Quantum_Operation):
                                                                   list_flagsZ,
                                                                   n_QEC,
                                                                   errors_det,
-                                                                  data_error_previous)
+                                                                  data_error_previous_list)
             syndromeZ, flagsZ, sub_indices, errors_det, data_error_previous = outputZ
             list_syndromesZ += [syndromeZ]
             list_flagsZ += [flagsZ]
             list_sub_indices += sub_indices
             n_QEC += 1
+            data_error_previous_list = [data_error_previous_list[1], data_error_previous]
             
             #print 'stabs after =', self.stabs
             
