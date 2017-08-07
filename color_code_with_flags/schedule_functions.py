@@ -9,6 +9,7 @@ def convert_to_binary(stab, n_total=17):
     converts a stabilizer from human readable [1,2,3,4] to
     a binary list
     '''
+    #print stab
 
     bin_list = [0 for i in range(n_total)]
     for index in stab:
@@ -124,7 +125,7 @@ def can_correct(err, lookup_dict, n_total, stabs):
                          logical operator.
 
     '''
-    log_bin = convert_to_binary(range(n_total))
+    log_bin = convert_to_binary(range(n_total), n_total)
     syn = tuple(error_to_syndrome(err[:], n_total, stabs[:]))
     if syn not in lookup_dict.keys():  
         return False, None, syn
@@ -183,3 +184,71 @@ def add_flags_to_sched(sched_bare, flags=[[1,3]]):
         sched_flags += [meas_name]
 
     return sched_flags
+
+
+
+def complete_lookup(lookup, n_qubits, stabs, initial_w=1):
+    '''
+    Takes in an incomplete lookup table and loops over all w-1, w-2, w-3, ...
+    data errors until it fills in all the syndromes.
+    '''
+
+    n_syndromes = 2**(len(stabs))
+    
+    current_w = initial_w
+    # loop iteratively until all syndromes are covered
+    while len(lookup) < n_syndromes:
+
+        print 'current weight =', current_w
+        #print len(lookup)
+        #current_errors = lookup.values()[:]
+
+        # Since we are not considering hook errors for surface-49,
+        # we always start from the no-error configuration.
+        current_errors = [[0 for i in range(n_qubits)]]
+        data_errors = errors_n(n_qubits, current_w)
+        print len(data_errors)
+
+        for data_err in data_errors:
+            #print data_err
+            data_err_bin = convert_to_binary(data_err, n_qubits)
+            #print data_err_bin
+            for err in current_errors:
+                comb_err = multiply_operators(data_err_bin[:], err[:])
+                #print comb_err
+                in_dict, log_par, syn = can_correct(comb_err[:],
+                                                    lookup,
+                                                    n_qubits,
+                                                    stabs[:])
+                if not in_dict:
+                    lookup[syn] = comb_err
+                    
+        current_w += 1
+
+    return lookup, current_w
+
+
+
+def convert_keys_to_strings(lookup):
+    '''
+    Converts the keys of a lookup table from tuples to strings
+    '''
+    new_lookup = {}
+    for key in lookup:
+        new_key = ''.join(map(str,key))
+        new_lookup[new_key] = lookup[key]
+
+    return new_lookup
+
+
+
+def errors_n(n_qubits, weight):
+    '''
+    returns a list of all errors of weight "weight".
+    '''
+    errors_n = []
+    for comb in it.combinations(range(n_qubits), weight):
+        errors_n += [list(comb)]
+
+    return errors_n
+
