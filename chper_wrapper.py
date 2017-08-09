@@ -2809,7 +2809,7 @@ def add_errors_fast_sampler(gate_indices, n_errors, subcircs, error_info):
 
 
 def add_errors_fast_sampler_new(gate_indices, n_errors, subcircs, error_info,
-                                fraction_of_circ=3):
+                                sub_circ_break=1):
     '''
     '''
     sampling = 'Muyalon'
@@ -2828,12 +2828,35 @@ def add_errors_fast_sampler_new(gate_indices, n_errors, subcircs, error_info,
     #print "selected one qubit gates are", selected_one_q_gates
     selected_two_q_gates = two_q_gates[ : n_errors[1]]
     #print "selected two qubit gates are", selected_two_q_gates
+    
+    sorted_one_q_gates = sorted(selected_one_q_gates, key=lambda gate: gate[0])
+    sorted_two_q_gates = sorted(selected_two_q_gates, key=lambda gate: gate[0])
 
-    carry_run = False   
+    if n_errors[0] > 0:
+        subcirc_one_q_gates_indices = [gate[0] for gate in sorted_one_q_gates]      
+    else:
+        subcirc_one_q_gates_indices = [2]
+
+    if n_errors[1] > 0:
+        subcirc_two_q_gates_indices = [gate[0] for gate in sorted_two_q_gates]
+    else:
+        subcirc_two_q_gates_indices = [2]
+    
+    total_indices = subcirc_one_q_gates_indices + subcirc_two_q_gates_indices
+    sorted_total_indices = sorted(total_indices)
+
+    # if all the errors are added after the first round of QEC, then we don't
+    # even run the circuit.
+    if sorted_total_indices[0] > sub_circ_break:
+        return [selected_one_q_gates, selected_two_q_gates], False, None
+
+
+    carry_run = True
     faulty_subcircs = []
     errors_dict = {}
     for i in range(n_subcircs):
-        subcirc = subcircs[i]
+        subcirc = copy.deepcopy(subcircs[i])
+        #subcirc = subcircs[i]
         # local gates are the gates that we are adding errors after
         local_gates = []
 
@@ -2852,13 +2875,14 @@ def add_errors_fast_sampler_new(gate_indices, n_errors, subcircs, error_info,
 
         faulty_subcircs += [subcirc]
         
-        subcirc_dict, local_carry_run = get_errors_dict(subcirc)
-        if i >= int(2*n_subcircs/fraction_of_circ): 
-            local_carry_run = False
-        carry_run = carry_run or local_carry_run
-        errors_dict[i] = subcirc_dict
+        #subcirc_dict, local_carry_run = get_errors_dict(subcirc)
+        #if i >= int(2*n_subcircs/fraction_of_circ): 
+        #    local_carry_run = False
+        #carry_run = carry_run or local_carry_run
+        #errors_dict[i] = subcirc_dict
 
-    return errors_dict, carry_run, faulty_subcircs
+    #return errors_dict, carry_run, faulty_subcircs
+    return [selected_one_q_gates, selected_two_q_gates], carry_run, faulty_subcircs
 
 
 

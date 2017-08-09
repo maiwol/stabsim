@@ -6,6 +6,7 @@ import cross
 import steane
 import fivequbit
 import surface17 as surf17
+import surface49 as surf49
 import d5color
 import correction as cor
 from visualizer import browser_vis as brow
@@ -13,6 +14,27 @@ import schedules_d5
 
 QEC_lookuptable = schedules_d5.lookups
 
+
+
+
+def initial_product_state(n_qubits, stab_kind='Z'):
+    '''
+    Returns the stabilizers and destabilizers corresponding to a product
+    state |000...00> (Z) or |+++...++> (X).
+    '''
+    
+    if stab_kind == 'Z':  destab_kind = 'X'
+    elif stab_kind == 'X':  destab_kind = 'Z'
+    prod_stabs, prod_destabs = [], []
+    for i in range(n_qubits):
+        prod_stab = [stab_kind if i==j else 'I' for j in range(n_qubits)]
+        prod_stab.insert(0, '+')
+        prod_destab = [destab_kind if i==j else 'I' for j in range(n_qubits)]
+        prod_destab.insert(0, '+')
+        prod_stabs += [''.join(prod_stab)]
+        prod_destabs += [''.join(prod_destab)]
+ 
+    return prod_stabs, prod_destabs
 
 
 
@@ -477,6 +499,19 @@ def stabs_QEC_bare_anc(dic, n_first_anc, code, stab_kind='X'):
         outcome_string = ''.join(map(str,outcome))
         qubits_corr = code_class.lookuptable[corr_kind][outcome_string]
         corr = ['E' if i in qubits_corr else 'I' for i in range(n_q)]
+
+    elif code == 'surface49':
+        n_q = 25
+        len_dic = 12
+        code_class = surf49.Code
+        corr_kind = stab_kind + 'stabs'
+
+        outcome = [dic[n_first_anc + i][0] for i in range(len_dic)]
+        outcome_string = ''.join(map(str,outcome))
+        qubits_corr = code_class.lookuptable[corr_kind][outcome_string]
+        corr = ['E' if i==1 else 'I' for i in qubits_corr]
+
+
 
     if len(dic) != len_dic:
         raise IndexError('The dict does not have the right length.')

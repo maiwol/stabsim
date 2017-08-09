@@ -3,6 +3,7 @@ import copy
 import circuit as cir
 import steane as st
 import d5color
+import surface49 as surf49
 import chper_extended as chper
 import qcircuit_functions as qfun
 from visualizer import browser_vis as brow
@@ -404,6 +405,8 @@ class QEC_d3(Quantum_Operation):
         output_dict = self.run_one_circ(circuit)
         anc_qubit_list = sorted(output_dict.keys())
         n_first_anc_X = min(anc_qubit_list)
+        #print n_first_anc_X
+        #print anc_qubit_list
         if stab_kind == 'both':
             
             # X stabilizers come first by convention
@@ -436,18 +439,65 @@ class QEC_d3(Quantum_Operation):
         
 
         elif stab_kind == 'Z':
+            #print output_dict
             data_errors = qfun.stabs_QEC_bare_anc(output_dict,
                                                n_first_anc_X,
                                                code,
                                                stab_kind)
             data_errors = ['X' if oper=='E' else oper for oper in data_errors]
 
-
+        
         return data_errors
 
+    
+    
+    def run_one_bare_anc_new(self, circuit, code, stab_kind, errors_det,
+                             list_syndromesX=[], list_syndromesZ=[],
+                             added_data_err_previous=[False,False]):
+        '''
+        runs one round of QEC for the whole set of stabilizers
+        assuming bare ancillae.
+        circuit refers to the index of the circuit to be run.
+        '''
+
+        output_dict = self.run_one_circ(circuit)
+        anc_qubit_list = sorted(output_dict.keys())
+        n_first_anc = min(anc_qubit_list)
+        
+        # These next lines are taken from the high indeterminacy function from
+        # QEC_with_flags:
+        # If a new data errror was detected by the stabilizers, add 1 to errors_det
+        # We have to be very careful (conservative).  We only add 1 if the syndrome
+        # is different from the last 2 syndromes, if no flags were triggered in the 2
+        # previous steps and if no data error was detected on the previous step.
+        # I'm sure we can refine it even further.
+        
+        out_keys = output_dict.keys()[:]
+        out_keys.sort()
+        syndromes = [output_dict[key][0] for key in out_keys]
+
+        if len(list_syndromesX) == 0:
+            last_syndromeX = [0 for i in range(len(anc_qubit_list))]
+        else:
+            last_syndromeX = list_syndromesX[-1][:]
+        if len(list_syndromesZ) == 0:
+            last_syndromeZ = [0 for i in range(len(anc_qubit_list))]
+        else:
+            last_syndromeZ = list_syndromesZ[-1][:]
+        
+        # Define logical clauses
+        data_error_det = False
+        syn_clause = (syndromes != last_syndromeX) and (syndromes != last_syndromeZ)
+        data_err_clause = (not added_data_err_previous[0]) and (not added_data_err_previous[1])
+        if (syn_clause) and (data_err_clause):
+            errors_det += 1
+            data_error_det = True
+
+        return syndromes, errors_det, data_error_det
 
 
-    def run_fullQEC_nonCSS(self, code, bare=True):
+
+    def run_fullQEC_nonCSS_d3(self, code, bare=True):
         '''
         runs 2 or 3 rounds of QEC for a distance-3 non-CSS code,
         like the 5-qubit code or the Cross code.
@@ -495,7 +545,7 @@ class QEC_d3(Quantum_Operation):
 
 
 
-    def run_fullQEC_CSS(self, code, bare=True, old_dec=True):
+    def run_fullQEC_CSS_d3(self, code, bare=True, old_dec=True):
         '''
         runs 2 or 3 rounds of QEC for a distance-3 CSS code,
         like the Steane code or the surface-17.
@@ -697,8 +747,10 @@ class Verify_CatState(Quantum_Operation):
 
 
 
-class QEC_d5(Quantum_Operation):
+class QEC_d5(QEC_d3):
     '''
+    QEC_d5 inherits from QEC_d3, which in turn inherits from Quantum_Operation
+    This is not ideal, but I'm being careful about not over-writing methods.
     '''
 
 
@@ -757,7 +809,7 @@ class QEC_d5(Quantum_Operation):
 
 
     
-    def run_bare_anc(self, redun=3):
+    def run_bare_anc_d5(self, redun=3):
         '''
         with bare anc
         '''
@@ -860,8 +912,7 @@ class QEC_d5(Quantum_Operation):
 
 
 
-
-    def run_fullQEC_CSS(self):
+    def run_fullQEC_CSS_color(self):
         '''
         runs QEC for the distance-5 4.8.8 color code.
         At the end, it applies a correction.
@@ -938,6 +989,127 @@ class QEC_d5(Quantum_Operation):
             self.destabs = corr_state[1][:]
 
         return len(Z_data_errors), len(X_data_errors)
+
+
+
+    def run_QEC_d5(self):
+        '''
+        Run the whole thing
+        Specifically thought for a CSS d-5 code with bare ancillae (surface-49 for now)
+        The meta-decoder is essentially the same as for the d-5 color code, with the 
+        exception that there are no flags.
+        '''
+        
+        list_syndromesX, list_syndromesZ = [], []
+        list_sub_indices = []
+        n_QEC = 0
+        QEC_to_break = 8
+        decided_to_break = False
+        errors_det = 0
+        data_error_previous_list = [False,False]
+
+        for rep in range(4):
+        
+            # First X stabilizers
+            #print 'X stabs %i' %rep
+            #print 'stabs before =', self.stabs
+            index_X = 2*rep
+            outputX = self.run_one_bare_anc_new(index_X, 'surface49', 'X',
+                                                errors_det, list_syndromesX,
+                                                list_syndromesZ, data_error_previous_list)
+            syndromeX, errors_det, data_error_previous = outputX
+            list_syndromesX += [syndromeX]
+            #list_flagsX += [flagsX]
+            list_sub_indices += [index_X]
+            n_QEC += 1
+            data_error_previous_list = [data_error_previous_list[1], data_error_previous]
+
+            #print 'stabs after =', self.stabs
+
+            #print 'Errors detected so far =', errors_det
+
+            # Decide when to break
+            if n_QEC == QEC_to_break:  break
+            if not decided_to_break and errors_det >= 2:
+                decided_to_break = True
+                QEC_to_break = n_QEC + 2
+
+            # Then Z stabilizers
+            #print 'Z stabs %i' %rep
+            #print 'stabs before =', self.stabs
+            index_Z = 2*rep + 1
+            outputZ = self.run_one_bare_anc_new(index_Z, 'surface49', 'Z',
+                                                errors_det, list_syndromesX,
+                                                list_syndromesZ, data_error_previous_list)
+            syndromeZ, errors_det, data_error_previous = outputZ
+            list_syndromesZ += [syndromeZ]
+            #list_flagsZ += [flagsZ]
+            list_sub_indices += [index_Z]
+            n_QEC += 1
+            data_error_previous_list = [data_error_previous_list[1], data_error_previous]
+            
+            #print 'stabs after =', self.stabs
+            
+            #print 'Errors detected so far =', errors_det
+
+            # Decide when to break
+            if n_QEC == QEC_to_break:  break
+            if not decided_to_break and errors_det >= 2:
+                decided_to_break = True
+                QEC_to_break = n_QEC + 2
+            
+            # Extra conditions to break
+            if n_QEC == 2 and errors_det == 0:  break
+            elif n_QEC == 6 and errors_det == 1:  break
+            elif n_QEC == 8 and errors_det == 2:  break
+
+
+        #print 'n_QEC = ', n_QEC
+        #print 'X syndromes =', list_syndromesX
+        #print 'Z syndromes =', list_syndromesZ
+        #print 'X flags =', list_flagsX
+        #print 'Z flags =', list_flagsZ
+        #print list_sub_indices
+        #sys.exit(0)
+
+        # Combine or add the flags
+        #combined_flagsX = qfun.combine_flags(list_flagsX)
+        #combined_flagsZ = qfun.combine_flags(list_flagsZ)
+
+        #print 'X flags combined =', combined_flagsX
+        #print 'Z flags combined =', combined_flagsZ
+
+        # Take last syndromes to be the "correct" ones
+        last_syndromeX = ''.join(map(str,list_syndromesX[-1]))
+        last_syndromeZ = ''.join(map(str,list_syndromesZ[-1]))
+
+        # Read the correction from the lookup tables.
+        surf49_lookup = surf49.Code.lookuptable
+        # correction of X errors uses flagsX and syndromeZ
+        corrX = surf49_lookup['Zstabs'][last_syndromeZ]
+        # correction of Z errors viceversa
+        corrZ = surf49_lookup['Xstabs'][last_syndromeX]
+
+        #print 'corrX =', corrX
+        #print 'corrZ =', corrZ
+
+        # Perform the correction on the final state
+        final_corrX = ['I' if oper==0 else 'X' for oper in corrX]
+        final_corrZ = ['I' if oper==0 else 'Z' for oper in corrZ]
+        
+        #print final_corrX
+        #print final_corrZ
+
+
+        self.stabs, self.destabs = qfun.update_stabs(self.stabs[:],
+                                                     self.destabs[:],
+                                                     final_corrX)
+        self.stabs, self.destabs = qfun.update_stabs(self.stabs[:],
+                                                     self.destabs[:],
+                                                     final_corrZ)
+
+        return list_sub_indices
+
 
 
 
