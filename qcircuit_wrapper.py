@@ -451,7 +451,7 @@ class QEC_d3(Quantum_Operation):
 
     
     
-    def run_one_bare_anc_new(self, circuit, code, stab_kind, errors_det,
+    def run_one_bare_anc_new(self, circuit, code, stab_kind, errors_det=0,
                              list_syndromesX=[], list_syndromesZ=[],
                              added_data_err_previous=[False,False]):
         '''
@@ -476,24 +476,26 @@ class QEC_d3(Quantum_Operation):
         out_keys.sort()
         syndromes = [output_dict[key][0] for key in out_keys]
 
-        if len(list_syndromesX) == 0:
-            last_syndromeX = [0 for i in range(len(anc_qubit_list))]
-        else:
-            last_syndromeX = list_syndromesX[-1][:]
-        if len(list_syndromesZ) == 0:
-            last_syndromeZ = [0 for i in range(len(anc_qubit_list))]
-        else:
-            last_syndromeZ = list_syndromesZ[-1][:]
+        return syndromes
+
+        #if len(list_syndromesX) == 0:
+        #    last_syndromeX = [0 for i in range(len(anc_qubit_list))]
+        #else:
+        #    last_syndromeX = list_syndromesX[-1][:]
+        #if len(list_syndromesZ) == 0:
+        #    last_syndromeZ = [0 for i in range(len(anc_qubit_list))]
+        #else:
+        #    last_syndromeZ = list_syndromesZ[-1][:]
         
         # Define logical clauses
-        data_error_det = False
-        syn_clause = (syndromes != last_syndromeX) and (syndromes != last_syndromeZ)
-        data_err_clause = (not added_data_err_previous[0]) and (not added_data_err_previous[1])
-        if (syn_clause) and (data_err_clause):
-            errors_det += 1
-            data_error_det = True
+        #data_error_det = False
+        #syn_clause = (syndromes != last_syndromeX) and (syndromes != last_syndromeZ)
+        #data_err_clause = (not added_data_err_previous[0]) and (not added_data_err_previous[1])
+        #if (syn_clause) and (data_err_clause):
+        #    errors_det += 1
+        #    data_error_det = True
 
-        return syndromes, errors_det, data_error_det
+        #return syndromes, errors_det, data_error_det
 
 
 
@@ -1000,13 +1002,16 @@ class QEC_d5(QEC_d3):
         exception that there are no flags.
         '''
         
-        list_syndromesX, list_syndromesZ = [], []
+        trivial_syn = [0 for i in range(12)]
+        list_syndromesX = [trivial_syn[:], trivial_syn[:]]
+        list_syndromesZ = [trivial_syn[:], trivial_syn[:]]
         list_sub_indices = []
         n_QEC = 0
         QEC_to_break = 8
         decided_to_break = False
         errors_det = 0
-        data_error_previous_list = [False,False]
+        added_error_previousX = False
+        added_error_previousZ = False
 
         for rep in range(4):
         
@@ -1014,18 +1019,33 @@ class QEC_d5(QEC_d3):
             #print 'X stabs %i' %rep
             #print 'stabs before =', self.stabs
             index_X = 2*rep
-            outputX = self.run_one_bare_anc_new(index_X, 'surface49', 'X',
-                                                errors_det, list_syndromesX,
-                                                list_syndromesZ, data_error_previous_list)
-            syndromeX, errors_det, data_error_previous = outputX
+            syndromeX = self.run_one_bare_anc_new(index_X, 'surface49', 'X') 
+            #outputX = self.run_one_bare_anc_new(index_X, 'surface49', 'X',
+            #                                    errors_det, list_syndromesX,
+            #                                    list_syndromesZ, data_error_previous_list)
+            #syndromeX, errors_det, data_error_previous = outputX
+            #print 'syndrome X =', syndromeX
+            #print 'errors determined =', errors_det
+            
             list_syndromesX += [syndromeX]
             #list_flagsX += [flagsX]
             list_sub_indices += [index_X]
             n_QEC += 1
-            data_error_previous_list = [data_error_previous_list[1], data_error_previous]
+            #data_error_previous_list = [data_error_previous_list[1], data_error_previous]
+            
+            # New criteria to determine if an error has occured
+            clause1 = list_syndromesZ[-2] == list_syndromesZ[-1]
+            clause2 = list_syndromesX[-2] != list_syndromesX[-1]
+            if clause1 and clause2 and (not added_error_previousX):
+                errors_det += 1
+                added_error_previousX = True
+            else:
+                added_error_previousX = False
+                
 
             #print 'stabs after =', self.stabs
 
+            #print 'Errors detected on this round =', data_error_previous
             #print 'Errors detected so far =', errors_det
 
             # Decide when to break
@@ -1038,18 +1058,31 @@ class QEC_d5(QEC_d3):
             #print 'Z stabs %i' %rep
             #print 'stabs before =', self.stabs
             index_Z = 2*rep + 1
-            outputZ = self.run_one_bare_anc_new(index_Z, 'surface49', 'Z',
-                                                errors_det, list_syndromesX,
-                                                list_syndromesZ, data_error_previous_list)
-            syndromeZ, errors_det, data_error_previous = outputZ
+            syndromeZ = self.run_one_bare_anc_new(index_Z, 'surface49', 'Z')
+            #outputZ = self.run_one_bare_anc_new(index_Z, 'surface49', 'Z',
+            #                                    errors_det, list_syndromesX,
+            #                                    list_syndromesZ, data_error_previous_list)
+            #syndromeZ, errors_det, data_error_previous = outputZ
+            #print 'syndrome Z =', syndromeZ
+            #print 'errors determined =', errors_det
             list_syndromesZ += [syndromeZ]
             #list_flagsZ += [flagsZ]
             list_sub_indices += [index_Z]
             n_QEC += 1
-            data_error_previous_list = [data_error_previous_list[1], data_error_previous]
+            #data_error_previous_list = [data_error_previous_list[1], data_error_previous]
             
+            # New criteria to determine if an error has occured
+            clause1 = list_syndromesX[-2] == list_syndromesX[-1]
+            clause2 = list_syndromesZ[-2] != list_syndromesZ[-1]
+            if clause1 and clause2 and (not added_error_previousZ):
+                errors_det += 1
+                added_error_previousZ = True
+            else:
+                added_error_previousZ = False
+
             #print 'stabs after =', self.stabs
             
+            #print 'Errors detected on this round =', data_error_previous
             #print 'Errors detected so far =', errors_det
 
             # Decide when to break
@@ -1057,7 +1090,10 @@ class QEC_d5(QEC_d3):
             if not decided_to_break and errors_det >= 2:
                 decided_to_break = True
                 QEC_to_break = n_QEC + 2
-            
+      
+            #print 'Decided to break?', decided_to_break
+            #print 'QEC to break = ', QEC_to_break
+
             # Extra conditions to break
             if n_QEC == 2 and errors_det == 0:  break
             elif n_QEC == 6 and errors_det == 1:  break

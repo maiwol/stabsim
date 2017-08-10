@@ -31,7 +31,6 @@ QEC_circ = cor.Bare_Correct.generate_rep_bare_meas(25, surface49_stabs, 4, initi
 QEC_circ_list = []
 for supra_gate in QEC_circ.gates:
     QEC_circ_list += [supra_gate.circuit_list[0]]
-#brow.from_circuit(QEC_circ_list[1])
 
 
 # Define the list of error-prone 1-q and 2-q gates
