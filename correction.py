@@ -499,6 +499,225 @@ class Flag_Correct:
 
         return complete_circ
 
+    
+    
+    @classmethod
+    def generate_one_flagged_stab_ion(cls, i_first_anc, stabilizer, 
+                                      meas_errors, initial_I=False,
+                                      dephasing_during_MS=True,
+                                      reordering_after=0):
+        '''
+        Specific to the d3 color code
+        '''
+
+        #n_flags = len(flags)
+        n_data = 7
+        n_flags = 1
+        n_total = n_data + 1 + n_flags
+        Pauli_oper = stabilizer[0][0]
+        #coupling_gate = 'C'+Pauli_oper
+        
+        # The Is are just place-holders; no errors will be inserted after them.
+        if Pauli_oper == 'X':  extra_gates = ['I','I']
+        elif Pauli_oper == 'Z':  extra_gates = ['RY +', 'RY -']
+
+        stab_circ = Circuit()
+        if initial_I:
+            for i in range(n_data):
+                stab_circ.add_gate_at([i], 'Ism')
+
+
+        stab_circ.add_gate_at([i_first_anc], 'PrepareZPlus')
+        for i in range(n_flags):
+            stab_circ.add_gate_at([i_first_anc+i+1], 'PrepareZPlus')
+
+
+        # shuttling d1 to the operating zone and cooling 
+        for i in range(n_total):
+            stab_circ.add_gate_at([i], 'Ism')
+            stab_circ.add_gate_at([i], 'Icool')
+
+
+        # couple d1 to s
+        d1 = stabilizer[0][1]
+        stab_circ.add_gate_at([d1], extra_gates[0])
+        stab_circ.add_gate_at([d1], 'RX -')
+        inter_qs = [d1, i_first_anc]
+        stab_circ.add_gate_at(inter_qs, 'MS')
+        stab_circ.add_gate_at([d1], extra_gates[1])
+        idle_is = [i for i in range(n_total) if i not in inter_qs]
+        if dephasing_during_MS:
+            for i in idle_is:
+                stab_circ.add_gate_at([i], 'Ism')
+
+        # shuttling d1 back to the storage zone S2
+        for i in range(n_total):
+            stab_circ.add_gate_at([i], 'Ism')
+            stab_circ.add_gate_at([i], 'Icool')
+        
+        # couple s to f
+        stab_circ.add_gate_at([i_first_anc,i_first_anc+1], 'MS')
+        if dephasing_during_MS:
+            for i in range(i_first_anc):
+                stab_circ.add_gate_at([i], 'Ism')
+        
+        # shuttling d2 to the operating zone and cooling 
+        for i in range(n_total):
+            stab_circ.add_gate_at([i], 'Ism')
+            stab_circ.add_gate_at([i], 'Icool')
+
+        # couple d2 to s
+        d2 = stabilizer[1][1]
+        stab_circ.add_gate_at([d2], extra_gates[0])
+        stab_circ.add_gate_at([d2], 'RX -')
+        inter_qs = [d2, i_first_anc]
+        stab_circ.add_gate_at(inter_qs, 'MS')
+        stab_circ.add_gate_at([d2], extra_gates[1])
+        idle_is = [i for i in range(n_total) if i not in inter_qs]
+
+        if dephasing_during_MS:
+            for i in idle_is:
+                stab_circ.add_gate_at([i], 'Ism')
+        
+        # shuttling d3 to the operating zone and cooling 
+        for i in range(n_total):
+            stab_circ.add_gate_at([i], 'Ism')
+            stab_circ.add_gate_at([i], 'Ism')
+            stab_circ.add_gate_at([i], 'Ism')
+            stab_circ.add_gate_at([i], 'Icool')
+
+        # couple d3 to s
+        d3 = stabilizer[2][1]
+        stab_circ.add_gate_at([d3], extra_gates[0])
+        stab_circ.add_gate_at([d3], 'RX -')
+        inter_qs = [d3, i_first_anc]
+        stab_circ.add_gate_at(inter_qs, 'MS')
+        stab_circ.add_gate_at([d3], extra_gates[1])
+        idle_is = [i for i in range(n_total) if i not in inter_qs]
+        if dephasing_during_MS:
+            for i in idle_is:
+                stab_circ.add_gate_at([i], 'Ism')
+
+        # shuttling d3 back to the storage zone S2
+        for i in range(n_total):
+            stab_circ.add_gate_at([i], 'Ism')
+            stab_circ.add_gate_at([i], 'Icool')
+
+        # couple s to f
+        stab_circ.add_gate_at([i_first_anc,i_first_anc+1], 'MS')
+        if dephasing_during_MS:
+            for i in range(i_first_anc):
+                stab_circ.add_gate_at([i], 'Ism')
+        
+        # shuttling d4 to the operating zone and cooling 
+        for i in range(n_total):
+            stab_circ.add_gate_at([i], 'Ism')
+            stab_circ.add_gate_at([i], 'Icool')
+
+        # couple d4 to s
+        d4 = stabilizer[3][1]
+        stab_circ.add_gate_at([d4], extra_gates[0])
+        stab_circ.add_gate_at([d4], 'RX -')
+        inter_qs = [d4, i_first_anc]
+        stab_circ.add_gate_at(inter_qs, 'MS')
+        stab_circ.add_gate_at([d4], extra_gates[1])
+        idle_is = [i for i in range(n_total) if i not in inter_qs]
+        if dephasing_during_MS:
+            for i in idle_is:
+                stab_circ.add_gate_at([i], 'Ism')
+        
+        # shuttling d4 back to the storage zone S2
+        for i in range(n_total):
+            stab_circ.add_gate_at([i], 'Ism')
+
+        if meas_errors:
+            stab_circ.add_gate_at([i_first_anc], 'ImZ')
+            stab_circ.add_gate_at([i_first_anc+1], 'ImZ')
+
+        stab_circ.add_gate_at([i_first_anc], 'MeasureZ')
+        stab_circ.add_gate_at([i_first_anc+1], 'MeasureZ')
+        for i in range(i_first_anc):
+            stab_circ.add_gate_at([i], 'Icool')
+        
+        # reordering after
+        if reordering_after == 0:  delay = 0
+        elif reordering_after == 1:  delay = 4
+        elif reordering_after == 2:  delay = 5
+        elif reordering_after == 3:  delay = 6
+
+        for i in range(i_first_anc):
+            for n_Is in range(delay):
+                stab_circ.add_gate_at([i], 'Ism')
+
+        return stab_circ
+
+
+    
+    @classmethod
+    def generate_one_nonFT_stab_ion(cls, i_first_anc, stabilizer, 
+                                    meas_errors, initial_I=False,
+                                    dephasing_during_MS=True,
+                                    reordering_after=0):
+        '''
+        Uses a 5-qubit MS gate
+        '''
+        
+        #n_flags = len(flags)
+        n_data = 7
+        n_total = n_data + 1
+        Pauli_oper = stabilizer[0][0]
+        coupling_gate = 'C'+Pauli_oper
+
+        stab_circ = Circuit()
+        if initial_I:
+            for i in range(n_data):
+                stab_circ.add_gate_at([i], 'Ism')
+        
+        stab_circ.add_gate_at([i_first_anc], 'PrepareXPlus')
+
+        # shuttling d1, d2, d3, d4 to the operating zone and cooling 
+        for i in range(n_total):
+            stab_circ.add_gate_at([i], 'Ism')
+            stab_circ.add_gate_at([i], 'Icool')
+
+        # performing the 5-qubit MS gate
+        # Since I don't know how to compile the 5-qubit MS gate in
+        # terms of C, H, and P, we just perform 4 CXs or CZs and
+        # then add a gate name IMS5 to add the errors.
+        stab_qs = [oper[1] for oper in stabilizer]
+        for i in stab_qs:
+            stab_circ.add_gate_at([i_first_anc, i], coupling_gate)
+        
+        idle_is = [i for i in range(n_total) if i not in stab_qs]
+        if dephasing_during_MS:
+            for i in idle_is:
+                stab_circ.add_gate_at([i], 'Ism')
+    
+        stab_qs += [i_first_anc]
+        stab_circ.add_gate_at(stab_qs, 'IMS5')
+
+        # shuttling d1, d2, d3, d4 to the operating zone and cooling
+        for i in range(n_total):
+            stab_circ.add_gate_at([i], 'Ism')
+
+        if meas_errors:
+            stab_circ.add_gate_at([i_first_anc], 'ImX')
+        stab_circ.add_gate_at([i_first_anc], 'MeasureX')
+
+        # reordering after
+        if reordering_after == 0:  delay = 0
+        elif reordering_after == 1:  delay = 4
+        elif reordering_after == 2:  delay = 5
+        elif reordering_after == 3:  delay = 6
+
+        for i in range(i_first_anc):
+            for n_Is in range(delay):
+                stab_circ.add_gate_at([i], 'Ism')
+
+        return stab_circ
+        
+
+
 
 
 class Bare_Correct:
