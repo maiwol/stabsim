@@ -649,6 +649,9 @@ class Flag_Correct:
             for n_Is in range(delay):
                 stab_circ.add_gate_at([i], 'Ism')
 
+        # convert the last two qubits to ancilla
+        stab_circ.to_ancilla([i_first_anc, i_first_anc+1])
+
         return stab_circ
 
 
@@ -673,7 +676,7 @@ class Flag_Correct:
             for i in range(n_data):
                 stab_circ.add_gate_at([i], 'Ism')
         
-        stab_circ.add_gate_at([i_first_anc], 'PrepareXPlus')
+        stab_circ.add_gate_at([i_first_anc], 'PrepareXMinus')
 
         # shuttling d1, d2, d3, d4 to the operating zone and cooling 
         for i in range(n_total):
@@ -687,13 +690,13 @@ class Flag_Correct:
         stab_qs = [oper[1] for oper in stabilizer]
         for i in stab_qs:
             stab_circ.add_gate_at([i_first_anc, i], coupling_gate)
-        
+       
+        stab_qs += [i_first_anc]
         idle_is = [i for i in range(n_total) if i not in stab_qs]
         if dephasing_during_MS:
             for i in idle_is:
                 stab_circ.add_gate_at([i], 'Ism')
     
-        stab_qs += [i_first_anc]
         stab_circ.add_gate_at(stab_qs, 'IMS5')
 
         # shuttling d1, d2, d3, d4 to the operating zone and cooling
@@ -714,9 +717,75 @@ class Flag_Correct:
             for n_Is in range(delay):
                 stab_circ.add_gate_at([i], 'Ism')
 
+        # convert the last qubit to ancilla
+        stab_circ.to_ancilla([i_first_anc])
+
         return stab_circ
         
+        
+    
+    @classmethod
+    def generate_whole_QEC_d3_ion(cls, stabilizers, meas_errors,
+                                  initial_I=True,
+                                  dephasing_during_MS=True):
+        '''
 
+        '''
+        # this is the case if the stabilizers are going to be
+        # alternating: Sx1, Sz1, Sx2, Sz2, Sx3, Sz3
+        if stabilizers[0][0][0] != stabilizers[1][0][0]:
+            reordering_values = [0,1,0,2,0,3]
+        # this is the case if the stabilizers are going to be
+        # non-alternating: Sx1, Sx2, Sx3, Sz1, Sz2, Sz3
+        else:
+            reordering_values = [1,2,3,1,2,3]
+        
+        n_rep = 2
+        FT_func = Flag_Correct.generate_one_flagged_stab_ion 
+        nonFT_func = Flag_Correct.generate_one_nonFT_stab_ion 
+        complete_circ = Circuit()
+       
+        print reordering_values
+
+        # First round of stabilizers: FT and non-FT
+        for i_stab in range(len(stabilizers)):
+            local_initial_I = False
+            if i_stab == 0 and initial_I:  local_initial_I = True
+                    
+            # the FT construction with 1 flag
+            circ1 = FT_func(7, stabilizers[i_stab],
+                            meas_errors,
+                            local_initial_I,
+                            dephasing_during_MS,
+                            reordering_values[i_stab])
+            circ1 = Encoded_Gate('Stab_FT%i'%i_stab, [circ1]).circuit_wrap()
+                    
+            # the non-FT construction with no flags
+            # and 2 5-qubit MS gates
+            circ2 = nonFT_func(7, stabilizers[i_stab],
+                               meas_errors,
+                               False,
+                               dephasing_during_MS,
+                               reordering_values[i_stab])
+            circ2 = Encoded_Gate('Stab_nonFT%i'%i_stab, [circ2]).circuit_wrap()
+            circ1.join_circuit(circ2)
+            complete_circ.join_circuit(circ1)
+
+        
+        # Second round of stabilizers: only non-FT
+        for i_stab in range(len(stabilizers)):
+                    
+            # the non-FT construction with no flags
+            # and 2 5-qubit MS gates
+            circ2 = nonFT_func(7, stabilizers[i_stab],
+                               meas_errors,
+                               False,
+                               dephasing_during_MS,
+                               reordering_values[i_stab])
+            circ2 = Encoded_Gate('Stab_nonFT%i'%i_stab, [circ2]).circuit_wrap()
+            complete_circ.join_circuit(circ2)
+
+        return complete_circ
 
 
 

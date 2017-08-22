@@ -1486,6 +1486,103 @@ class QEC_with_flags(Quantum_Operation):
 
 
 
+    def run_stabilizers_high_indet_ion(self, index_first_subcirc, alternating=True,
+                                       change_error_det='any'):
+        '''
+        Runs 1 or 2 rounds of the d-3 color code stabilizers.
+        The first round has both the FT flagged stabilizer measurements and the
+        non-FT unflagged measurement.  The second round has only the non-FT
+        version because it is only run if an error occurred during the first round.
+        
+        Inputs:
+        (1) index_first_subcirc:  always 0 for now.
+        (2) alternaring: refers to whether the stabilizers alternate between
+        X and Z: Sx1, Sz1, Sx2, Sz2, Sx3, Sz3; or not.
+        
+        The alternating version requires less shuttling.
+        '''
+        
+        # to avoid adding an extra X on the syndrome and the flag qubits, 
+        # we just re-interpret the outcome: in this case '1' means no error
+        # and '0' means error.
+        flag_no_trig = 1
+        syn_no_error = 1
+        syndromes, flags = [], []
+        subcircs_indices = []
+        
+        error_det = False
+        for i in range(6):
+
+            # if an error has been determined, run the odd subcircuit
+            if error_det:
+                i_subcirc = index_first_subcirc + 2*i + 1
+                out_dict = self.run_one_circ(i_subcirc)
+                syndromes += [out_dict.values()[0][0]]
+                flags += [flag_no_trig]
+            else:
+                i_subcirc = index_first_subcirc + 2*i
+                out_dict = self.run_one_circ(i_subcirc)
+                out_keys = out_dict.keys()[:]
+                out_keys.sort()
+                syndromes += [out_dict[out_keys[0]][0]]
+                flag = out_dict[out_keys[1]][0] 
+                if flag != flag_no_trig:
+                    error_det = True
+                elif change_error_det == 'any':
+                    if syndromes[-1] != syn_no_error:
+                        error_det = True
+                flags += [flag]
+
+            subcircs_indices += [i_subcirc]
+
+        # if an error happened on the first round, we need a second round
+        if error_det:
+            syndromes = []
+            for i in range(6):
+                i_subcirc = 12 + i
+                out_dict = self.run_one_circ(i_subcirc)
+                syndromes += [out_dict.values()[0][0]]
+                
+                subcircs_indices += [i_subcirc]
+
+            print 'syndromes extra =', syndromes
+
+
+        print 'syndromes =', syndromes
+        print 'flags =', flags
+        print 'subcircs indices =', subcircs_indices
+        
+        if alternating:
+            X_is, Z_is = [0,2,4], [1,3,5]
+        else:
+            X_is, Z_is = [0,1,2], [3,4,5]
+            
+        syndromesX = tuple([(syndromes[i]+syn_no_error)%2 for i in X_is])
+        flagsX = tuple([(flags[i]+flag_no_trig)%2 for i in X_is])
+        syndromesZ = tuple([(syndromes[i]+syn_no_error)%2 for i in Z_is])
+        flagsZ = tuple([(flags[i]+flag_no_trig)%2 for i in Z_is])
+
+        print 'synX =', syndromesX
+        print 'synZ =', syndromesZ
+
+        # Perform the correction on the final state
+        corrX = st.Code.total_lookup_table_one_flag[flagsX][syndromesZ]
+        corrZ = st.Code.total_lookup_table_one_flag[flagsZ][syndromesX]
+       
+        corrX = [oper if oper=='I' else 'X' for oper in corrX]
+        corrZ = [oper if oper=='I' else 'Z' for oper in corrZ]
+
+        self.stabs, self.destabs = qfun.update_stabs(self.stabs[:],
+                                                     self.destabs[:],
+                                                     corrX)
+        self.stabs, self.destabs = qfun.update_stabs(self.stabs[:],
+                                                     self.destabs[:],
+                                                     corrZ)
+
+        return subcircs_indices
+
+
+
     def run_Reichardt_d3_one_flag_stab(self, metadecoder='cheap',
                                        change_error_det='flag'):
         '''
