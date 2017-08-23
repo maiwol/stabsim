@@ -745,7 +745,8 @@ class Flag_Correct:
         nonFT_func = Flag_Correct.generate_one_nonFT_stab_ion 
         complete_circ = Circuit()
        
-        print reordering_values
+        #print 'Im in correction.py'
+        #print reordering_values
 
         # First round of stabilizers: FT and non-FT
         for i_stab in range(len(stabilizers)):

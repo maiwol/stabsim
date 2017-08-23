@@ -2498,6 +2498,7 @@ def find_subsets(ps,pt,ns,nt,tol):
 def gates_list(circs, faulty_gates_names):
     single_qubit_gates = []
     two_qubit_gates = []
+    high_w_gates = []
     gl = faulty_gates_names[:]
 
     #for i in range(len(circs)):
@@ -2512,9 +2513,15 @@ def gates_list(circs, faulty_gates_names):
                 if len(gates[j].qubits) == 1:
                     single_qubit_gates.append((i,j))
                 elif len(gates[j].qubits) == 2:
+                    #print gates[j].gate_name
                     two_qubit_gates.append((i,j))
+                elif len(gates[j].qubits) > 2:
+                    #print gates[j].gate_name
+                    high_w_gates.append((i,j))
 
-    return single_qubit_gates, two_qubit_gates
+    return single_qubit_gates, two_qubit_gates, high_w_gates
+
+
 
 def gates_list_surface(flat_circ, faulty_gates_names):
     single_qubit_gates = []
@@ -2639,9 +2646,20 @@ def get_errors_dict(subcirc):
 
 def dict_for_error_model(error_model, p_1q, p_2q, p_meas, 
                          p_bath=0., heating_rate=0., 
-                         Stark_rate=0.):
+                         Stark_rate=0., p_prep=0., 
+                         p_sm=0., p_cool=0.):
     '''
+    p_prep:  the error rate associated with a qubit state prep.
+             We assume it's a bit-flip channel for Z prep and
+             a phase-flip channel for X prep.
+    p_sm:    the error rate associated with the idle time during 
+             shuttling (s) and merging (m).  We assume it's only
+             phase damping.
+    p_cool:  the error rate associated with the idle time during
+             the cooling.  Likewise, we assume it's only phase
+             damping.
     '''
+
     error_dict = {}
     error_dict['error_kind'] = 1
     error_dict['ImX'] = {'error_rate': p_meas, 'error_ratio': {'Z': 1}}
@@ -2745,6 +2763,61 @@ def dict_for_error_model(error_model, p_1q, p_2q, p_meas,
         # The error rate is obtained by multiplying the Stark_rate by the duration of
         # the gate.
         error_dict['I_stark'] = {'error_rate': Stark_rate, 'error_ratio': {'Z': 1}}
+
+    
+    elif error_model == 'ion_trap_eQual':
+        
+        Is_after_two_qubit = False
+        Is_after_one_qubit = False
+
+        # For now, no errors after 1-qubit gates to speed up the fast sampler
+        # After preparations we add a flip (bit or phase)
+        prep_gatesZ = ['PrepareZ', 'PrepareZPlus', 'PrepareZMinus']
+        prep_dictZ = {'error_rate': p_prep, 'error_ratio': {'X': 1}}
+        for g in prep_gatesZ:
+            error_dict[g] = dict(prep_dictZ)
+        
+        prep_gatesX = ['PrepareX', 'PrepareXPlus', 'PrepareXMinus']
+        prep_dictX = {'error_rate': p_prep, 'error_ratio': {'Z': 1}}
+        for g in prep_gatesX:
+            error_dict[g] = dict(prep_dictX)
+        
+        # Errors after shuttling, merging and cooling
+        error_dict['Ism'] = {'error_rate': p_sm, 'error_ratio': {'Z': 1}}
+        error_dict['Icool'] = {'error_rate': p_cool, 'error_ratio': {'Z': 1}}
+
+        # Over-rotation after MS gates
+        # For now the error after an MS gate will be the symmetric
+        # depolarizing channel, not XX, in order to be on the same page
+        # with arXiv:1705.02771.  Might change later on.
+        
+        # 2-qubit MS gate
+        #error_dict['MS'] = {'error_rate': p_2q, 'error_ratio': {'XX': 1}}
+        twoq_ratio = {}
+        for prod in it.product('IXYZ', repeat=2):
+            twoq_error = ''.join(prod)
+            if twoq_error == 'II':
+                continue
+            twoq_ratio[twoq_error] = 1
+        error_dict['MS'] = {'error_rate': p_2q, 'error_ratio': twoq_ratio} 
+
+        # 5-qubit MS gate
+        # Since we don't know yet how to compile a 5-qubit MS gate into
+        # CHP, we are using this trick where we just use CXs and CZs and
+        # afterwards add a gate name IMS5.
+        # The error rate has to be twice p_2q, because when we measure a
+        # stabilizer using 5-qubit MS gates, we really apply 2 of these.
+        # Later on, we might have a different error rate for 2-qubit MS gates
+        # and 5-qubit MS gates.
+        #error_dict['IMS5'] = {'error_rate': 2*p_2q, 'error_ratio': 'XXXXX': 1}}
+        fiveq_ratio = {}
+        for prod in it.product('IXYZ', repeat=5):
+            fiveq_error = ''.join(prod)
+            if fiveq_error == 'IIIII':
+                continue
+            fiveq_ratio[fiveq_error] = 1
+        error_dict['IMS5'] = {'error_rate': 2*p_2q, 'error_ratio': fiveq_ratio} 
+        
 
 
     else:
