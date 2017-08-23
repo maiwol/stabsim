@@ -1841,7 +1841,7 @@ class Supra_Circuit(object):
             q_oper = QEC_d3(self.state[:], quant_circs, self.chp_loc)
             
             if self.code == 'Steane':
-                n_rep = q_oper.run_fullQEC_CSS(self.code, self.bare)
+                n_rep = q_oper.run_fullQEC_CSS_d3(self.code, self.bare)
             
             elif self.code=='Cross' or self.code=='5qubit':
                 n_rep = q_oper.run_fullQEC_nonCSS(self.code, self.bare)

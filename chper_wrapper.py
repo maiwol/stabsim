@@ -2523,6 +2523,27 @@ def gates_list(circs, faulty_gates_names):
 
 
 
+def gates_list_general(circs, faulty_gates_names_grouped):
+    '''
+    More general than gates_list.
+    faulty_gates_names_grouped:  a list of lists specifying how to group
+    the faulty gates.  
+    For example, [['IMS5', 'MS'], ['ImZ', 'ImX'], ['Ism'], ['Icool']]
+    means that there are 4 groups.
+    '''
+
+    out_gates_lists = [[] for group in faulty_gates_names_grouped]
+    
+    for i in range(len(circs)):
+        gates = circs[i].gates
+        for j in range(len(gates)):
+            for k in range(len(out_gates_lists)):
+                if gates[j].gate_name in faulty_gates_names_grouped[k]:
+                    out_gates_lists[k].append((i,j))
+
+    return out_gates_lists
+
+
 def gates_list_surface(flat_circ, faulty_gates_names):
     single_qubit_gates = []
     two_qubit_gates = []
@@ -2781,10 +2802,17 @@ def dict_for_error_model(error_model, p_1q, p_2q, p_meas,
         prep_dictX = {'error_rate': p_prep, 'error_ratio': {'Z': 1}}
         for g in prep_gatesX:
             error_dict[g] = dict(prep_dictX)
-        
+
+        # All the prep gates and the measurements have the same error rate for
+        # now, so we group them together.
+        faulty_group1 = prep_gatesZ + prep_gatesX + ['ImZ', 'ImX']
+
+
         # Errors after shuttling, merging and cooling
         error_dict['Ism'] = {'error_rate': p_sm, 'error_ratio': {'Z': 1}}
+        faulty_group2 = ['Ism']
         error_dict['Icool'] = {'error_rate': p_cool, 'error_ratio': {'Z': 1}}
+        faulty_group3 = ['Icool']
 
         # Over-rotation after MS gates
         # For now the error after an MS gate will be the symmetric
@@ -2817,7 +2845,12 @@ def dict_for_error_model(error_model, p_1q, p_2q, p_meas,
                 continue
             fiveq_ratio[fiveq_error] = 1
         error_dict['IMS5'] = {'error_rate': 2*p_2q, 'error_ratio': fiveq_ratio} 
-        
+            
+        faulty_group4 = ['IMS5', 'MS']
+
+        faulty_groups = [faulty_group1, faulty_group2, faulty_group3, faulty_group4]
+
+        return error_dict, Is_after_two_qubit, Is_after_one_qubit, faulty_groups
 
 
     else:
