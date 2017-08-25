@@ -2992,6 +2992,85 @@ def add_errors_fast_sampler_new(gate_indices, n_errors, subcircs, error_info,
 
 
 
+def add_errors_fast_sampler_ion(gate_indices, n_errors, subcircs, error_info,
+                                n_subcircs_first_round=12):
+    '''
+    gate_indices:  a list of lists, each one corresponding to the indices for 
+                   each particular kind of gate.
+    
+    '''
+    sampling = 'Muyalon'
+    n_subcircs = len(subcircs)
+
+    # shuffle each list of gate indices and select the faulty gates
+    total_selected_gates = []
+    subcirc_gates_indices = []
+    total_indices = []
+    for i in range(len(n_errors)):
+        rd.shuffle(gate_indices[i])  # shuffle one of the lists
+        selected_gates = gate_indices[i][:n_errors[i]]  # select faulty gates
+        sorted_selected_gates = sorted(selected_gates, key=lambda gate: gate[0])
+        total_selected_gates += [sorted_selected_gates]
+
+        # define a list with the subcirc indices for each faulty gate
+        # if this particular faulty gate has no errors, then we add
+        # 1 to the number of subcircs on the first round of QEC.
+        # This is done just to make it easier to determine if the circuit
+        # will be run at all.
+        if n_errors[i] > 0:
+            subcirc_gates_indices += [[gate[0] for gate in sorted_selected_gates]]
+        else:
+            subcirc_gates_indices += [[n_subcircs_first_round + 1]]
+        
+        # total_indices is just the flat-list version of subcirc_gates_indices
+        total_indices += subcirc_gates_indices[-1]
+
+    sorted_total_indices = sorted(total_indices)
+
+
+    # Decide whether or not to run the circuit
+    # First step:  determine which one is the first even index.
+    # Even indices correspond to FT circuits, whereas odd indices
+    # correspond to non-FT circuits.  If the first even index is
+    # after the first round of QEC, then we don't run the circuit
+    # because it means that no error would occur on the first round.
+    first_even_index = len(subcircs)
+    for index in sorted_total_indices:
+        if index%2 == 0:
+            first_even_index = index
+            break
+
+    #print first_even_index
+
+    if first_even_index >= n_subcircs_first_round:
+        return total_selected_gates, False, None
+
+    
+    carry_run = True
+    faulty_subcircs = []
+    for i in range(n_subcircs):
+        subcirc = copy.deepcopy(subcircs[i])
+        
+        # local gates are the gates that we are adding errors after
+        local_gates = []
+
+        # figure out if this particular subcircuit has errors
+        for i_gate in range(len(n_errors)):
+            for pair in total_selected_gates[i_gate]:
+                if i == pair[0]:
+                    # the selected gate must be in the current subcircuit
+                    local_gates += [pair[1]]
+
+        if len(local_gates) != 0:           
+            # if no gates selected at all, then no need to perform the add error step at all
+	        error.add_error_alternative(subcirc, error_info, sampling, local_gates)
+
+        faulty_subcircs += [subcirc]
+        
+    return total_selected_gates, carry_run, faulty_subcircs
+
+
+
 def add_errors_fast_sampler_color(gate_indices, n_errors, subcircs, error_info):
     '''
     '''

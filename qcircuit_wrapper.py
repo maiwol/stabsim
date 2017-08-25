@@ -1545,12 +1545,12 @@ class QEC_with_flags(Quantum_Operation):
                 
                 subcircs_indices += [i_subcirc]
 
-            print 'syndromes extra =', syndromes
+            #print 'syndromes extra =', syndromes
 
 
-        print 'syndromes =', syndromes
-        print 'flags =', flags
-        print 'subcircs indices =', subcircs_indices
+        #print 'syndromes =', syndromes
+        #print 'flags =', flags
+        #print 'subcircs indices =', subcircs_indices
         
         if alternating:
             X_is, Z_is = [0,2,4], [1,3,5]
@@ -1562,8 +1562,8 @@ class QEC_with_flags(Quantum_Operation):
         syndromesZ = tuple([(syndromes[i]+syn_no_error)%2 for i in Z_is])
         flagsZ = tuple([(flags[i]+flag_no_trig)%2 for i in Z_is])
 
-        print 'synX =', syndromesX
-        print 'synZ =', syndromesZ
+        #print 'synX =', syndromesX
+        #print 'synZ =', syndromesZ
 
         # Perform the correction on the final state
         corrX = st.Code.total_lookup_table_one_flag[flagsX][syndromesZ]
