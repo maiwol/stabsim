@@ -2456,6 +2456,25 @@ def prob_for_subset(ps,pt,ns,nt,s,t):
     a = scipy.misc.comb(ns, s, exact=False)*(ps**s)*((1-ps)**(ns-s))*scipy.misc.comb(nt,t,exact=False)*(pt**t)*((1-pt)**(nt-t))
     return a
 
+
+def prob_for_subset_general(n_gates_list, n_errors_list, n_ps):
+    '''
+    Generalized function for prob_for_subset
+    calculates the probability of occurrence for a given general subset.
+    n_gates_list:  a list with the number of gates for each kind.
+    n_errors_list:  number of errors after each particular kind of gate
+    '''
+    a = 1.
+    for i in range(len(n_gates_list)):
+        n_g = n_gates_list[i]   # number of gates
+        n_e = n_errors_list[i]  # number of errors
+        p = n_ps[i]   # error p
+        a *= scipy.misc.comb(n_g,n_e,exact=False)*(p**n_e)*((1-p)**(n_g-n_e))
+
+    return a
+
+
+
 # given a tolerance value, find all error subsets that have probability larger than tolerance
 def find_subsets(ps,pt,ns,nt,tol):
     tot = totalprob(ps,pt,ns,nt)

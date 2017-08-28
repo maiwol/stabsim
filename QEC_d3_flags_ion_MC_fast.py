@@ -98,7 +98,7 @@ init_stabs = steane.Code.stabilizer_logical_CHP[state][:]
 #init_stabs[3] = '-' + init_stabs[3][1:]
 init_destabs = steane.Code.destabilizer_logical_CHP[state][:]
 init_state = [init_stabs, init_destabs]
-print init_stabs
+#print init_stabs
 
 
 def run_QEC_d3(init_state, QEC_circ_list, chp_loc, alternating):
