@@ -6,6 +6,7 @@ steane.py
 import sys
 import os
 import time
+import json
 from circuit import *
 #from visualizer import Printer
 import correction
@@ -117,6 +118,31 @@ class Code:
                     0: stabilizer_syndrome_dict,
                     1: stabilizer_syndrome_dict_flag
                     }
+
+    # Lookup table when we use 1 flag for each stabilizer
+    # There is one dictionary for each one of the 4 possible
+    # flag outcomes (no flags triggered, first, second, third)
+    # The lookup tables are the same as the original with the
+    # exception of the syndrome corresponding to a w-2 hook
+    # error.  We assume that all w-2 error events will be
+    # caused by a measurement error + data error.  Therefore,
+    # for all other syndromes the correction is exactly the 
+    # same as the the original one.
+    syn_dict_flag0 = dict(stabilizer_syndrome_dict)
+    syn_dict_flag0[(0,0,1)] = ["I","I","I","I","I","E","E"]
+    syn_dict_flag1 = dict(stabilizer_syndrome_dict)
+    syn_dict_flag1[(0,0,1)] = ["I","I","I","I","I","E","E"]
+    syn_dict_flag2 = dict(stabilizer_syndrome_dict)
+    syn_dict_flag2[(0,1,0)] = ["I","I","I","I","E","I","E"]
+
+    total_lookup_table_one_flag = {
+                                (0,0,0): stabilizer_syndrome_dict,
+                                (1,0,0): syn_dict_flag0,
+                                (0,1,0): syn_dict_flag1,
+                                (0,0,1): syn_dict_flag2
+                                }
+
+
     # stabilizers in CHP-friendly format
     
     stabilizer_CHP = [
@@ -534,6 +560,95 @@ class Generator:
         steane_module=sys.modules[__name__]
         return correction.Knill_Correct.knill_syndrome(ecc=steane_module)
 
+
+
+    @classmethod
+    def physical_CNOT_ion_trap(cls, CNOT_index=0):
+        '''
+        Circuit for a fully scheduled transversal CNOT on an ion trap based
+        on Alejandro Bermudez's work and eQual's experimental parameters
+        
+        The basic idea is that 2 logical qubits involved live on different
+        arms of a Y-junction trap.  We cannot perform entangling MS gates
+        between non-nearest neighbors, so we have to shuttle ions back and
+        forth.
+
+        Duration assumptions (in arbitrary units; only ratios matter):
+        Shuttle = 1; splitting/merging = 3; rotation = 2; 1q gate = 0;
+        2q gate = 2; multi-qubit gate = 2; measurement = 3; prep = 1;
+        cooling = 10.
+        The duration of the transport through the junction is an 
+        independent parameter.
+        '''
+
+        if CNOT_index == 0:
+            waiting_times = [6,5,1]
+            n_cross = 3
+        elif CNOT_index == 4:
+            waiting_times = [8,5,1]
+            n_cross = 4
+        else:
+            waiting_times = [5,5,1]
+            n_cross = 0
+
+        CNOT_circ = Circuit()
+        
+        # Initial shuttling of group of 4 ions
+        for q in range(7):
+            for t in range(waiting_times[0]):
+                CNOT_circ.add_gate_at([q], 'I_idle')
+                CNOT_circ.add_gate_at([q+7], 'I_idle')
+            for t in range(n_cross):
+                CNOT_circ.add_gate_at([q], 'I_cross')
+                CNOT_circ.add_gate_at([q+7], 'I_cross')
+
+        # Y rotation on ctrl qubit
+        CNOT_circ.add_gate_at([CNOT_index], 'RY +')
+
+        # Shuttling and cooling before MS gate
+        for q in range(7):
+            for t in range(waiting_times[1]):
+                CNOT_circ.add_gate_at([q], 'I_idle')
+                CNOT_circ.add_gate_at([q+7], 'I_idle')
+
+        # MS gate and X rotations
+        # Duration of MS gate = 1 time unit
+        active_qubits = [CNOT_index, CNOT_index+7]
+        CNOT_circ.add_gate_at(active_qubits, 'MS')
+        idle_qubits = [i for i in range(14) if i not in active_qubits]
+        for i in idle_qubits:
+            CNOT_circ.add_gate_at([i], 'I_idle')
+        
+        CNOT_circ.add_gate_at([CNOT_index], 'RX -')
+        CNOT_circ.add_gate_at([CNOT_index+7], 'RX -')
+
+        # Shuttling before second Y rotation
+        for i in range(7):
+            for t in range(waiting_times[2]):
+                CNOT_circ.add_gate_at([i], 'I_idle')
+                CNOT_circ.add_gate_at([i+7], 'I_idle')
+
+        # Second Y rotation on ctrl qubit
+        CNOT_circ.add_gate_at([CNOT_index], 'RY -')
+        
+        return CNOT_circ
+
+
+    
+    @classmethod
+    def transversal_CNOT_ion_trap(cls):
+        '''
+        All the 7 physical CNOTs
+        '''
+
+        total_circ = Circuit()
+        for CNOT_index in range(7):
+            CNOT_circ = Generator.physical_CNOT_ion_trap(CNOT_index)
+            CNOT_name = 'CNOT_%i' %CNOT_index
+            CNOT_circ = Encoded_Gate(CNOT_name, [CNOT_circ]).circuit_wrap()
+            total_circ.join_circuit(CNOT_circ)
+
+        return total_circ
 
 
     # The following methods were moved to correction.Steane:

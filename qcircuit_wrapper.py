@@ -1487,7 +1487,7 @@ class QEC_with_flags(Quantum_Operation):
 
 
     def run_stabilizers_high_indet_ion(self, index_first_subcirc, alternating=True,
-                                       change_error_det='any'):
+                                       change_error_det='any', decoder='old'):
         '''
         Runs 1 or 2 rounds of the d-3 color code stabilizers.
         The first round has both the FT flagged stabilizer measurements and the
@@ -1511,52 +1511,128 @@ class QEC_with_flags(Quantum_Operation):
         subcircs_indices = []
         
         error_det = False
-        for i in range(6):
 
-            # if an error has been determined, run the odd subcircuit
-            if error_det:
-                i_subcirc = index_first_subcirc + 2*i + 1
+        # New decoder
+        if decoder == 'new':
+            
+            # First run the FT subcircuits
+            for i in range(9):
+                i_subcirc = index_first_subcirc + i
                 out_dict = self.run_one_circ(i_subcirc)
-                syndromes += [out_dict.values()[0][0]]
-                flags += [flag_no_trig]
-            else:
-                i_subcirc = index_first_subcirc + 2*i
-                out_dict = self.run_one_circ(i_subcirc)
-                out_keys = out_dict.keys()[:]
-                out_keys.sort()
-                syndromes += [out_dict[out_keys[0]][0]]
-                flag = out_dict[out_keys[1]][0] 
-                if flag != flag_no_trig:
-                    error_det = True
-                elif change_error_det == 'any':
-                    if syndromes[-1] != syn_no_error:
+                
+                # The subcircs 2, 5, 8 are shuttling.
+                if i_subcirc%3 != 2:
+                    out_keys = out_dict.keys()[:]
+                    out_keys.sort()
+                    syndromes += [out_dict[out_keys[0]][0]]
+                    flag = out_dict[out_keys[1]][0]
+                    if flag != flag_no_trig:
                         error_det = True
-                flags += [flag]
+                    elif change_error_det == 'any':
+                        if syndromes[-1] != syn_no_error:
+                            error_det = True
+                    flags += [flag]
+                
+                subcircs_indices += [i_subcirc]
+                
+                # as soon as an error is detected, we break.
+                if error_det:  break
 
-            subcircs_indices += [i_subcirc]
 
-        # if an error happened on the first round, we need a second round
-        if error_det:
+            # If no error was detected during the first round
+            # we stop and don't correct.
+            if not error_det:  return subcircs_indices
+            
+            # Add trivial flags to the flags list
+            if len(subcircs_indices) < 3:
+                subcircs_run = len(subcircs_indices)
+                case = 1
+                next_subcircs = range(9,18)
+            elif len(subcircs_indices) < 6:
+                subcircs_run = len(subcircs_indices) - 1
+                next_subcircs = range(12,18) + [9,10]
+                case = 2
+            elif len(subcircs_indices) < 9:
+                subcircs_run = len(subcircs_indices) - 2
+                next_subcircs = [15,16,14,12,13,11,9,10]
+                case = 3
+            n_extra_flags = 6 - subcircs_run
+            extra_flags = [flag_no_trig for i in range(n_extra_flags)]
+            flags += extra_flags
+
+            # Now we run the second round (only non-FT stabs)
             syndromes = []
-            for i in range(6):
-                i_subcirc = 12 + i
+            for i_subcirc in next_subcircs:
                 out_dict = self.run_one_circ(i_subcirc)
-                syndromes += [out_dict.values()[0][0]]
+                
+                # The subcircs 11, 14, 17 are shuttling.
+                if i_subcirc%3 != 2:
+                    syndromes += [out_dict.values()[0][0]]
                 
                 subcircs_indices += [i_subcirc]
 
-            #print 'syndromes extra =', syndromes
+            if case == 2:
+                syndromes = [syndromes[4], syndromes[5], syndromes[0],
+                             syndromes[1], syndromes[2], syndromes[3]]
+            if case == 3:
+                syndromes = [syndromes[4], syndromes[5], syndromes[2],
+                             syndromes[3], syndromes[0], syndromes[1]]
 
 
-        #print 'syndromes =', syndromes
-        #print 'flags =', flags
-        #print 'subcircs indices =', subcircs_indices
+
+        # Old decoder
+        else:
+
+            for i in range(6):
+
+                # if an error has been determined, run the odd subcircuit
+                if error_det:
+                    i_subcirc = index_first_subcirc + 2*i + 1
+                    out_dict = self.run_one_circ(i_subcirc)
+                    syndromes += [out_dict.values()[0][0]]
+                    flags += [flag_no_trig]
+                else:
+                    i_subcirc = index_first_subcirc + 2*i
+                    out_dict = self.run_one_circ(i_subcirc)
+                    out_keys = out_dict.keys()[:]
+                    out_keys.sort()
+                    syndromes += [out_dict[out_keys[0]][0]]
+                    flag = out_dict[out_keys[1]][0] 
+                    if flag != flag_no_trig:
+                        error_det = True
+                    elif change_error_det == 'any':
+                        if syndromes[-1] != syn_no_error:
+                            error_det = True
+                    flags += [flag]
+
+                subcircs_indices += [i_subcirc]
+
+            
+            # if an error happened on the first round, we need a second round
+            if not error_det:  return subcircs_indices
+            else:
+                syndromes = []
+                for i in range(6):
+                    i_subcirc = 12 + i
+                    out_dict = self.run_one_circ(i_subcirc)
+                    syndromes += [out_dict.values()[0][0]]
+                    subcircs_indices += [i_subcirc]
+
+                #print 'syndromes extra =', syndromes
+
+            #print 'syndromes =', syndromes
+            #print 'flags =', flags
+            #print 'subcircs indices =', subcircs_indices
         
+
+
         if alternating:
             X_is, Z_is = [0,2,4], [1,3,5]
         else:
             X_is, Z_is = [0,1,2], [3,4,5]
-            
+        
+        #print syndromes
+        #print flags
         syndromesX = tuple([(syndromes[i]+syn_no_error)%2 for i in X_is])
         flagsX = tuple([(flags[i]+flag_no_trig)%2 for i in X_is])
         syndromesZ = tuple([(syndromes[i]+syn_no_error)%2 for i in Z_is])

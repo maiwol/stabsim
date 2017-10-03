@@ -2475,6 +2475,22 @@ def prob_for_subset_general(n_gates_list, n_errors_list, n_ps):
 
 
 
+def cardinality_subset(n_gates_list, n_errors_list):
+    '''
+    Calculates the cardinality (number of elements) of a given subset,
+    specified by the list n_errors_list.
+    n_gates_list:  a list with the number of gates for each kind.
+    n_errors_list:  number of errors after each particular kind of gate
+    '''
+    a = 1.
+    for i in range(len(n_gates_list)):
+        n_g = n_gates_list[i]   # number of gates
+        n_e = n_errors_list[i]  # number of errors
+        a *= scipy.misc.comb(n_g,n_e,exact=False)
+
+    return a
+
+
 # given a tolerance value, find all error subsets that have probability larger than tolerance
 def find_subsets(ps,pt,ns,nt,tol):
     tot = totalprob(ps,pt,ns,nt)
@@ -3053,16 +3069,19 @@ def add_errors_fast_sampler_ion(gate_indices, n_errors, subcircs, error_info,
     # correspond to non-FT circuits.  If the first even index is
     # after the first round of QEC, then we don't run the circuit
     # because it means that no error would occur on the first round.
-    first_even_index = len(subcircs)
-    for index in sorted_total_indices:
-        if index%2 == 0:
-            first_even_index = index
-            break
+    
+
+    # Commenting out these lines to run the new decoder
+    #first_even_index = len(subcircs)
+    #for index in sorted_total_indices:
+    #    if index%2 == 0:
+    #        first_even_index = index
+    #        break
 
     #print first_even_index
 
-    if first_even_index >= n_subcircs_first_round:
-        return total_selected_gates, False, None
+    #if first_even_index >= n_subcircs_first_round:
+    #    return total_selected_gates, False, None
 
     
     carry_run = True

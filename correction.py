@@ -727,8 +727,13 @@ class Flag_Correct:
     @classmethod
     def generate_whole_QEC_d3_ion(cls, stabilizers, meas_errors,
                                   initial_I=True,
-                                  dephasing_during_MS=True):
+                                  dephasing_during_MS=True,
+                                  decoding='old'):
         '''
+        decoding:  'new' refers to the new idea by Markus:
+                   as soon as we detect 1 error, we measure
+                   all the stabilizers 1 time non-FTly and
+                   keep the last syndromes.
 
         '''
         # this is the case if the stabilizers are going to be
@@ -747,6 +752,67 @@ class Flag_Correct:
        
         #print 'Im in correction.py'
         #print reordering_values
+
+        if decoding == 'new':
+            
+            # First round of stabilizers: only FT
+            # only works for now if order of stabs is alternating
+            for i_stab in range(len(stabilizers)):
+                local_initial_I = False
+                if i_stab == 0 and initial_I:  local_initial_I = True
+            
+                # the FT construction with 1 flag
+                circ1 = FT_func(7, stabilizers[i_stab],
+                                meas_errors,
+                                local_initial_I,
+                                dephasing_during_MS,
+                                0)
+                circ1 = Encoded_Gate('Stab_FT%i'%i_stab, [circ1]).circuit_wrap()
+                
+                if i_stab%2 == 1:
+                    if i_stab == 1:  delay = 4
+                    elif i_stab == 3:  delay = 5
+                    elif i_stab == 5:  delay = 6
+                    circ_shut = Circuit()
+                    for i in range(7):
+                        for n_Is in range(delay):
+                            circ_shut.add_gate_at([i], 'Ism')
+                    gate_name = 'Shuttling_%i_to_%i'%(i_stab/2, i_stab/2+1)
+                    circ_shut = Encoded_Gate(gate_name, [circ_shut]).circuit_wrap()
+                    circ1.join_circuit(circ_shut)
+
+                complete_circ.join_circuit(circ1)
+
+            # Second round of stabilizers: only non-FT
+            # only works for now if order of stabs is alternating
+            for i_stab in range(len(stabilizers)):
+                    
+                # the non-FT construction with no flags
+                # and 2 5-qubit MS gates
+                circ2 = nonFT_func(7, stabilizers[i_stab],
+                                   meas_errors,
+                                   False,
+                                   dephasing_during_MS,
+                                   0)
+                circ2 = Encoded_Gate('Stab_nonFT%i'%i_stab, [circ2]).circuit_wrap()
+                
+                if i_stab%2 == 1:
+                    if i_stab == 1:  delay = 4
+                    elif i_stab == 3:  delay = 5
+                    elif i_stab == 5:  delay = 6
+                    circ_shut = Circuit()
+                    for i in range(7):
+                        for n_Is in range(delay):
+                            circ_shut.add_gate_at([i], 'Ism')
+                    gate_name = 'Shuttling_%i_to_%i'%(i_stab/2, i_stab/2+1)
+                    circ_shut = Encoded_Gate(gate_name, [circ_shut]).circuit_wrap()
+                    circ2.join_circuit(circ_shut)
+                
+                complete_circ.join_circuit(circ2)
+
+            return complete_circ
+                
+
 
         # First round of stabilizers: FT and non-FT
         for i_stab in range(len(stabilizers)):
