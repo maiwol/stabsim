@@ -1892,7 +1892,7 @@ class Supra_Circuit(object):
         '''
    
         sub_circ = quant_gate.circuit_list[0]
-
+ 
         
         if quant_gate.gate_name[:8] == 'JointQEC':
             
@@ -1911,7 +1911,7 @@ class Supra_Circuit(object):
             return n_rep1, n_rep2 
 
 
-        if quant_gate.gate_name[-7:] == 'Correct':
+        elif quant_gate.gate_name[-7:] == 'Correct':
             
             quant_circs = [g.circuit_list[0] for g in sub_circ.gates]
             q_oper = QEC_d3(self.state[:], quant_circs, self.chp_loc)
