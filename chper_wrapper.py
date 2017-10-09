@@ -2703,7 +2703,8 @@ def get_errors_dict(subcirc):
 def dict_for_error_model(error_model, p_1q, p_2q, p_meas, 
                          p_bath=0., heating_rate=0., 
                          Stark_rate=0., p_prep=0., 
-                         p_sm=0., p_cool=0.):
+                         p_sm=0., p_cool=0.,
+                         p_cross=0.):
     '''
     p_prep:  the error rate associated with a qubit state prep.
              We assume it's a bit-flip channel for Z prep and
@@ -2714,6 +2715,9 @@ def dict_for_error_model(error_model, p_1q, p_2q, p_meas,
     p_cool:  the error rate associated with the idle time during
              the cooling.  Likewise, we assume it's only phase
              damping.
+    p_cross: the error rate associated with the idle time during
+             the crossing through the trap junction.  Likewise, we
+             assume it's only phase damping.
     '''
 
     error_dict = {}
@@ -2821,7 +2825,7 @@ def dict_for_error_model(error_model, p_1q, p_2q, p_meas,
         error_dict['I_stark'] = {'error_rate': Stark_rate, 'error_ratio': {'Z': 1}}
 
     
-    elif error_model == 'ion_trap_eQual':
+    elif error_model[:14] == 'ion_trap_eQual':
         
         Is_after_two_qubit = False
         Is_after_one_qubit = False
@@ -2842,12 +2846,6 @@ def dict_for_error_model(error_model, p_1q, p_2q, p_meas,
         # now, so we group them together.
         faulty_group1 = prep_gatesZ + prep_gatesX + ['ImZ', 'ImX']
 
-
-        # Errors after shuttling, merging and cooling
-        error_dict['Ism'] = {'error_rate': p_sm, 'error_ratio': {'Z': 1}}
-        faulty_group2 = ['Ism']
-        error_dict['Icool'] = {'error_rate': p_cool, 'error_ratio': {'Z': 1}}
-        faulty_group3 = ['Icool']
 
         # Over-rotation after MS gates
         # For now the error after an MS gate will be the symmetric
@@ -2881,9 +2879,42 @@ def dict_for_error_model(error_model, p_1q, p_2q, p_meas,
             fiveq_ratio[fiveq_error] = 1
         error_dict['IMS5'] = {'error_rate': 2*p_2q, 'error_ratio': fiveq_ratio} 
             
-        faulty_group4 = ['IMS5', 'MS']
+        faulty_group2 = ['IMS5', 'MS']
+        
+        if error_model[-1] == '2':
+            # Second eQual error model
+            
+            # Errors after idle qubit and junction crossing.
+            # We assume p_sm is the error rate associated with the idle qubits.
+            error_dict['I_idle'] = {'error_rate': p_sm, 'error_ratio': {'Z': 1}}
+            faulty_group3 = ['I_idle']
+            error_dict['I_cross'] = {'error_rate': p_cross, 'error_ratio': {'Z': 1}}
+            faulty_group4 = ['I_cross']
+        
+            # Depolarizing Pauli bath after 1-q rotations.
+            one_qubit_gates = ['RX +', 'RX -', 'RY +', 'RY -', 'RZ +', 'RZ -']
+            one_qubit_ratio = {'X': 1, 'Y': 1, 'Z': 1}
+            one_qubit_dict = {
+                    'error_rate': p_1q,
+                    'error_ratio': one_qubit_ratio
+                    }
+    
+            for g in one_qubit_gates:
+                error_dict[g] = one_qubit_dict
+            faulty_group5 = one_qubit_gates[:]
+            faulty_groups = [faulty_group1, faulty_group2, faulty_group3,
+                             faulty_group4, faulty_group5]            
 
-        faulty_groups = [faulty_group1, faulty_group2, faulty_group3, faulty_group4]
+
+        else:
+            # First eQual error model
+
+            # Errors after shuttling, merging and cooling
+            error_dict['Ism'] = {'error_rate': p_sm, 'error_ratio': {'Z': 1}}
+            faulty_group3 = ['Ism']
+            error_dict['Icool'] = {'error_rate': p_cool, 'error_ratio': {'Z': 1}}
+            faulty_group4 = ['Icool']
+            faulty_groups = [faulty_group1, faulty_group2, faulty_group3, faulty_group4]
 
         return error_dict, Is_after_two_qubit, Is_after_one_qubit, faulty_groups
 
@@ -3032,7 +3063,9 @@ def add_errors_fast_sampler_ion(gate_indices, n_errors, subcircs, error_info,
     '''
     gate_indices:  a list of lists, each one corresponding to the indices for 
                    each particular kind of gate.
-    
+
+    Right now the output variable carry_run is always True.
+
     '''
     sampling = 'Muyalon'
     n_subcircs = len(subcircs)
