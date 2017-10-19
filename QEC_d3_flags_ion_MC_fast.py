@@ -13,6 +13,9 @@ import qcircuit_wrapper as qwrap
 
 chp_loc = './chp_extended'
 error_model = 'ion_trap_eQual'
+decoder = 'new'
+if decoder == 'new':  n_subcircs_first_round = 9
+else:  n_subcircs_first_round = 12
 # These error rates don't matter for the fast sampler
 p1, p2, p_meas, p_prep, p_sm, p_cool = 0.1, 0.1, 0.1, 0.1, 0.1, 0.1 
 error_dict, Is_after2q, Is_after1q, faulty_groups = wrapper.dict_for_error_model(
@@ -25,13 +28,14 @@ error_info = mc.read_error_info(error_dict)
 n_per_proc, n_proc = int(sys.argv[1]), int(sys.argv[2])
 n_errors = [int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6])]
 alternating = sys.argv[7]   # either 'True' or 'False'
+in_state = sys.argv[8]  # either 'Z' or 'X'
 
 if alternating == 'True':
     alternating = True
-    output_folder = './MC_results/QECd3_flags/all_flags/ion_trap1/alternating/'
+    output_folder = './MC_results/QECd3_flags/all_flags/ion_trap1/alternating/%s/%s/' %(decoder,in_state)
 else:
     alternating = False
-    output_folder = './MC_results/QECd3_flags/all_flags/ion_trap1/non_alternating/'
+    output_folder = './MC_results/QECd3_flags/all_flags/ion_trap1/non_alternating/%s/%s/' %(decoder, in_state)
 
 
 
@@ -46,8 +50,10 @@ dephasing_during_MS = True
 QEC_circ = cor.Flag_Correct.generate_whole_QEC_d3_ion(stabs, 
                                                       meas_errors,
                                                       initial_I,
-                                                      dephasing_during_MS)
+                                                      dephasing_during_MS,
+                                                      decoder)
 #brow.from_circuit(QEC_circ, True)
+#sys.exit(0)
 QEC_circ_list = []
 for log_gate in QEC_circ.gates:
     QEC_circ_list += [log_gate.circuit_list[0]]
@@ -91,8 +97,9 @@ for subcirc in QEC_circ_list:
     #n_Icool += [Icool]
 
 
+
 # Define initial state
-state = '+Z'
+state = '+' + in_state
 init_stabs = steane.Code.stabilizer_logical_CHP[state][:]
 #init_stabs[0] = '-' + init_stabs[0][1:]
 #init_stabs[3] = '-' + init_stabs[3][1:]
@@ -101,12 +108,13 @@ init_state = [init_stabs, init_destabs]
 #print init_stabs
 
 
-def run_QEC_d3(init_state, QEC_circ_list, chp_loc, alternating):
+def run_QEC_d3(init_state, QEC_circ_list, chp_loc, alternating, decoder='old'):
     '''
     '''
 
     QEC_object = qwrap.QEC_with_flags(init_state, QEC_circ_list[:], chp_loc)
-    supra_gates = QEC_object.run_stabilizers_high_indet_ion(0, alternating)
+    supra_gates = QEC_object.run_stabilizers_high_indet_ion(0, alternating,
+                                                            'any', decoder)
 
     final_stabs, final_destabs = QEC_object.stabs[:], QEC_object.destabs[:]
 
@@ -137,7 +145,8 @@ def run_QEC_d3(init_state, QEC_circ_list, chp_loc, alternating):
 
 
 def run_several_QEC_fast(error_info, n_runs_total, init_state, QEC_circ_list,
-                         chp_loc, alternating, n_subcircs_first_round=12):
+                         chp_loc, alternating, n_subcircs_first_round=12,
+                         decoder='old'):
     '''
     '''
     did_run = 0
@@ -149,12 +158,19 @@ def run_several_QEC_fast(error_info, n_runs_total, init_state, QEC_circ_list,
 
     for n_run in xrange(n_runs_total):
 
+        #print n_run
         # Add the errors and decide to run
         sampler_output = wrapper.add_errors_fast_sampler_ion(gate_indices,
                                                              n_errors,
                                                              QEC_circ_list,
-                                                             error_info)
+                                                             error_info,
+                                                             n_subcircs_first_round)
         faulty_gates, carry_run, faulty_circs = sampler_output
+       
+        #print faulty_circs
+        # just for now we will always run the circuit, 
+        # cause the sampler function only works for the old decoder
+        carry_run = True
 
         if not carry_run:
             n_supra_gates += int(n_subcircs_first_round/2)
@@ -166,18 +182,26 @@ def run_several_QEC_fast(error_info, n_runs_total, init_state, QEC_circ_list,
             final_error, fail, supra_local = run_QEC_d3(init_state,
                                                         faulty_circs,
                                                         chp_loc,
-                                                        alternating)
+                                                        alternating,
+                                                        decoder)
             n_supra_gates += len(supra_local)
             if len(supra_local) == int(n_subcircs_first_round/2):
                 n_1round += 1
                 n_FT_subcirc += len(supra_local)
             else:
                 n_2round += 1
-                for num in supra_local:
-                    if (num%2 == 0) and (num < n_subcircs_first_round):
-                        n_FT_subcirc += 1
-                    else:
-                        n_nonFT_subcirc += 1
+
+                if decoder == 'old':
+                    for num in supra_local:
+                        if (num%2 == 0) and (num < n_subcircs_first_round):
+                            n_FT_subcirc += 1
+                        else:
+                            n_nonFT_subcirc += 1
+                elif decoder == 'new':
+                    for num in supra_local:
+                        if num < 6:  n_FT_subcirc += 1
+                        else:  n_nonFT_subcirc += 1
+            
 
             if final_error:  n_final_errors += 1
             if fail:  n_fails += 1
@@ -188,14 +212,15 @@ def run_several_QEC_fast(error_info, n_runs_total, init_state, QEC_circ_list,
 
 
 def run_parallel_QEC(error_info, n_runs_per_proc, n_proc, init_state, QEC_circ_list,
-                     chp_loc, alternating):
+                     chp_loc, alternating, n_subcircs_first_round, decoder):
     '''
     '''
     sim_func = run_several_QEC_fast
     pool = mp.Pool()
     results = [pool.apply_async(sim_func, (error_info, n_runs_per_proc,
                                            init_state, QEC_circ_list,
-                                           chp_loc, alternating))
+                                           chp_loc, alternating, 
+                                           n_subcircs_first_round, decoder))
                                    for proc in range(n_proc)]
     pool.close()
     pool.join()
@@ -204,9 +229,9 @@ def run_parallel_QEC(error_info, n_runs_per_proc, n_proc, init_state, QEC_circ_l
     return dicts
 
 
-
 out_list = run_parallel_QEC(error_info, n_per_proc, n_proc, init_state,
-                            QEC_circ_list, chp_loc, alternating)
+                            QEC_circ_list, chp_loc, alternating, n_subcircs_first_round,
+                            decoder)
 n_total = n_per_proc*n_proc
 n_final_errors = sum([event[0] for event in out_list])
 n_fail = sum([event[1] for event in out_list])

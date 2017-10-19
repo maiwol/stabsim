@@ -636,7 +636,7 @@ class Generator:
 
     
     @classmethod
-    def transversal_CNOT_ion_trap(cls):
+    def transversal_CNOT_ion_trap(cls, encoded_CNOTs=True, encoded_total_circ=False):
         '''
         All the 7 physical CNOTs
         '''
@@ -644,9 +644,26 @@ class Generator:
         total_circ = Circuit()
         for CNOT_index in range(7):
             CNOT_circ = Generator.physical_CNOT_ion_trap(CNOT_index)
-            CNOT_name = 'CNOT_%i' %CNOT_index
-            CNOT_circ = Encoded_Gate(CNOT_name, [CNOT_circ]).circuit_wrap()
+            if encoded_CNOTs:
+                CNOT_name = 'CNOT_%i' %CNOT_index
+                CNOT_circ = Encoded_Gate(CNOT_name, [CNOT_circ]).circuit_wrap()
             total_circ.join_circuit(CNOT_circ)
+
+        # Add the final re-ordering
+        final_circ = Circuit()
+        for q in range(14):
+            for t in range(6):
+                final_circ.add_gate_at([q], 'I_idle')
+            for t in range(3):
+                final_circ.add_gate_at([q], 'I_cross')
+
+        if encoded_CNOTs:
+            final_name = 'Final_reordering'
+            final_circ = Encoded_Gate(final_name, [final_circ]).circuit_wrap()
+        total_circ.join_circuit(final_circ)
+
+        if encoded_total_circ:
+            total_circ = Encoded_Gate('Transversal_CNOT', [total_circ]).circuit_wrap()
 
         return total_circ
 

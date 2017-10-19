@@ -627,6 +627,34 @@ def create_EC_subcircs(code, Is_after2q, initial_I=True,
 
 
 
+
+
+def create_measure_2_logicals_ion(logicals='X', meas_errors=True,
+                                  FT_meas=True, QEC_before=False):
+    '''
+    '''
+
+    n_code = 7
+    measure_circ = c.Circuit()
+
+    if QEC_before:
+        pass
+
+    else:
+
+        if logicals == 'X':
+            
+            # This means we will measure X_t X_a
+            # 1.  Measure X7_t X7_a.  In our convention 7 -> 1.
+            qubit_pairs = [[1,1], [2,1]]
+
+            
+
+
+
+
+
+
 def create_measure_2_logicals(Is_after2q, qubits, logicals='X',
                               meas_errors=True, FT_meas=True,
                               QEC_before=False, redun=3):

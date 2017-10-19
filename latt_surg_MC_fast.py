@@ -153,6 +153,10 @@ def run_several_latt_fast(error_info, n_runs_total, init_state):
         # create the supra-circuit and insert gates
         CNOT_circuits = qfun.create_latt_surg_CNOT(Is_after2q, initial_I, anc_parallel,
                                                    EC_ctrl_targ, FT)
+        
+        brow.from_circuit(CNOT_circuits, True)
+        sys.exit(0)
+        
         # shuffle gate indices
         rd.shuffle(one_q_gates)
         rd.shuffle(two_q_gates)
@@ -251,6 +255,9 @@ def run_parallel_latt(error_info, n_runs_per_proc, n_proc, init_state, sampling=
 
     return dicts
 
+
+print run_several_latt_fast(error_info, n_per_proc*n_proc, initial_state)
+sys.exit(0)
 
 out_list = run_parallel_latt(error_info, n_per_proc, n_proc, initial_state)
 n_total = n_per_proc*n_proc
