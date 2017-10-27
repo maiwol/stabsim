@@ -386,6 +386,75 @@ class Measure_2_logicals(Quantum_Operation):
           
 
 
+    def run_XX_flags(self):
+        '''
+        '''    
+        
+        tricky_indices = [4,5,6]  # using Alejandro's indexing
+        
+        # default values
+        corr_nonanc = 'normal'
+        corr_anc = False
+
+        # For now we will assume that there is no QEC step on the ancilla before
+        first_subcirc_i = 0
+
+        # list of outcomes of the low-weight and high-weight operators
+        low_w, high_w = [], []
+
+        # (2) Measure low-weight operator first time
+        low_w += [self.run_one_circ(first_subcirc_i).values()[0][0]]
+        print 'low_w1 =', low_w[0]
+        
+        # (3) Measure high-weight operator first time
+        high_w += [self.run_one_circ(first_subcirc_i+1).values()[0][0]]
+        print 'high_w1 =', high_w[0]
+
+        #print 'State after high-w operator:'
+        #print self.stabs
+
+        # (4) First QECX (FT) on target
+        QECX_supracirc = self.circuits[first_subcirc_i+2]
+        QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
+        QECX_targ = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
+        outputQECX_targ = QECX_targ.run_QECX_FT()
+        s_targ1, f_targ1, corr_targ, error_det_targ = outputQECX_targ
+        self.stabs, self.destabs = QECX_targ.stabs[:], QECX_targ.destabs[:]
+       
+        # (5) First QECX (FT) on ancilla 
+        QECX_supracirc = self.circuits[first_subcirc_i+3]
+        QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
+        QECX_anc = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
+        outputQECX_anc = QECX_anc.run_QECX_FT()
+        s_anc1, f_anc1, corr_anc, error_det_anc = outputQECX_anc
+        self.stabs, self.destabs = QECX_anc.stabs[:], QECX_anc.destabs[:]
+        
+        clause_targ = (corr_targ=='normal' and error_det_targ)
+        clause_anc = (corr_anc=='normal' and error_det_anc)
+        if clause_targ or clause_anc:
+            output = [low_w, high_w, [s_targ1], [s_anc1]] 
+            output += [[f_targ1], [f_anc1], 'normal', 'normal', True]
+            return tuple(output)
+
+        # (6) Measure low-weight operator second time
+        low_w += [self.run_one_circ(first_subcirc_i+4).values()[0][0]]
+        print 'low_w2 =', low_w[1]
+        
+        # (7) Measure high-weight operator second time
+        high_w += [self.run_one_circ(first_subcirc_i+5).values()[0][0]]
+        print 'high_w2 =', high_w[1]
+            
+        # if the total parity stayed the same    
+        if low_w[0]*high_w[0] == low_w[1]*high_w[1]:
+        
+            if low_w[0] != low_w[1]:
+                output = [low_w, high_w, [s_targ1], [s_anc1]] 
+                output += [[f_targ1], [f_anc1], 'normal', 'normal', True]
+                return tuple(output)
+                
+            if corr_targ == 'unknown':
+                print 'HOLA'
+
 class QEC_d3(Quantum_Operation):
     '''
     Quantum Error Correction for a distance-3 code.
@@ -1862,6 +1931,55 @@ class QEC_with_flags(Quantum_Operation):
 
         return None
             
+    
+    
+    def run_QECX_FT(self):
+        '''
+        output:  syndrome, flags, type of correction, error detected
+        '''
+
+        corr_type = 'normal'
+        error_det = True
+
+        # first we measure the stabilizer that doesn't "touch" the boundary
+        output_first = self.run_one_circ(0).values()
+        syn1, flag1 = output_first[0][0], output_first[1][0]
+        
+        # if an error is detected, we're done
+        if syn1==1 or flag1==1:
+            total_syn, total_flag = [syn1,0,0], [flag1,0,0]
+        
+        else:
+            # measure the second stabilizer
+            output_second = self.run_one_circ(1).values()
+            syn2, flag2 = output_second[0][0], output_second[1][0]
+            
+            # if the flag was triggered, we're done
+            if flag2==1:
+                total_syn, total_flag = [syn1,syn2,0], [flag1,flag2,0]
+            
+            else:
+
+                # if an error was detected, measure the third stab nonFT
+                if syn2==1:
+                    syn3 = self.run_one_circ(3).values()[0][0]
+                    total_syn, total_flag = [syn1,syn2,syn3], [flag1,flag2,0]
+                    corr_type = 'unknown'
+
+                # if no error was detected, measure the third one FT
+                else:
+                    output_third = self.run_one_circ(2).values()
+                    syn3, flag3 = output_third[0][0], output_third[1][0]
+                    total_syn, total_flag = [syn1,syn2,syn3], [flag1,flag2,flag3]
+
+                    # if the third flag wasn't triggered
+                    if flag3==0:
+                        if syn3==1:
+                            corr_type = 'unknown'
+                        else:
+                            error_det = False
+
+        return total_syn, total_flag, corr_type, error_det
 
 
 
@@ -1959,6 +2077,11 @@ class Supra_Circuit(object):
                 return parity, rep, corr_type, anc_corr
 
 
+        elif quant_gate.gate_name == 'MeasureXX_flags':
+
+            quant_circs = [g.circuit_list[0] for g in sub_circ.gates]
+            q_oper = Measure_2_logicals(self.state[:], quant_circs, self.chp_loc)
+            q_oper.run_XX_flags()
 
 
         else:
@@ -2025,6 +2148,11 @@ class CNOT_latt_surg(Supra_Circuit):
                     self.state = [corr_state[0][:], corr_state[1][:]]
                     #print 'State after corr:'
                     #print self.state[0]
+
+            
+            elif q_oper.gate_name == 'MeasureXX_flags':
+                pass
+
 
 
             elif q_oper.gate_name[:20] == 'Measure2logicalslong':

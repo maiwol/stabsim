@@ -856,6 +856,190 @@ class Flag_Correct:
 
 
 
+    @classmethod
+    def QECX_FT_lattsurg(cls, log_qubit=0):
+        '''
+        log_qubit: 0 (ctrl); 1 (targ); 2 (anc)
+        '''
+        
+        n_code = 7
+        n_total = 7*3
+        #stabs = [[0,1,2,3], [1,2,4,5], [2,6,5,3]]   # Alejandro
+        stabs = [[0,2,4,6], [3,4,5,6], [1,2,5,6]]    # Mauricio
+
+        QEC_circ = Circuit()
+        for i_stab in range(len(stabs)):
+            stab_circ = Circuit()
+            stab_circ.add_gate_at([n_total], 'PrepareXPlus')
+            stab_circ.add_gate_at([n_total+1], 'PrepareZPlus')
+            for i in range(len(stabs[i_stab])):
+                q_index = stabs[i_stab][i]
+                data_index = log_qubit*n_code + q_index
+                stab_circ.add_gate_at([n_total, data_index], 'CX')
+                if i==0 or i==2:
+                    stab_circ.add_gate_at([n_total, n_total+1], 'CX')
+            stab_circ.add_gate_at([n_total], 'ImX')
+            stab_circ.add_gate_at([n_total], 'MeasureX')
+            stab_circ.add_gate_at([n_total+1], 'ImZ')
+            stab_circ.add_gate_at([n_total+1], 'MeasureZ')
+        
+            stab_circ.to_ancilla(range(n_total, n_total+2))
+            stab_circ = Encoded_Gate('Stab_FT%i'%i_stab, [stab_circ]).circuit_wrap()
+            QEC_circ.join_circuit(stab_circ)
+
+        for i_stab in range(2,len(stabs)):
+            stab_circ = Circuit()
+            stab_circ.add_gate_at([n_total], 'PrepareXPlus')
+            for q_index in stabs[i_stab]:
+                data_index = log_qubit*n_code + q_index
+                stab_circ.add_gate_at([n_total, data_index], 'CX')
+            stab_circ.add_gate_at([n_total], 'ImX')
+            stab_circ.add_gate_at([n_total], 'MeasureX')
+            
+            stab_circ.to_ancilla([n_total])
+            stab_circ = Encoded_Gate('Stab_nonFT%i'%i_stab, [stab_circ]).circuit_wrap()
+            QEC_circ.join_circuit(stab_circ)
+
+        QEC_circ = Encoded_Gate('QECX_FT', [QEC_circ]).circuit_wrap()
+
+        return QEC_circ
+
+
+
+    @classmethod
+    def QECX_nonFT_lattsurg(cls, log_qubit=0):
+        '''
+        '''
+        
+        n_code = 7
+        n_total = 7*3
+        #stabs = [[0,1,2,3], [1,2,4,5], [2,6,5,3]]   # Alejandro
+        stabs = [[0,2,4,6], [3,4,5,6], [1,2,5,6]]    # Mauricio
+
+        QEC_circ = Circuit()
+        for i_stab in range(1,len(stabs)):
+            stab_circ = Circuit()
+            stab_circ.add_gate_at([n_total], 'PrepareXPlus')
+            for q_index in stabs[i_stab]:
+                data_index = log_qubit*n_code + q_index
+                stab_circ.add_gate_at([n_total, data_index], 'CX')
+            stab_circ.add_gate_at([n_total], 'ImX')
+            stab_circ.add_gate_at([n_total], 'MeasureX')
+            
+            stab_circ.to_ancilla([n_total])
+            stab_circ = Encoded_Gate('Stab_nonFT%i'%i_stab, [stab_circ]).circuit_wrap()
+            QEC_circ.join_circuit(stab_circ)
+
+        QEC_circ = Encoded_Gate('QECX_nonFT', [QEC_circ]).circuit_wrap()
+        
+        return QEC_circ
+
+
+
+    @classmethod
+    def measure_XXlogical(QEC_before=False):
+        '''
+        '''
+
+        n_code = 7
+        n_total = 7*3
+        XX_circ = Circuit()
+
+        if QEC_before:
+            pass
+        
+        # measure the w-2 operator
+        #qubits = [[1,6], [2,6]]   # Alejandro
+        qubits = [[1,1], [2,1]]   # Mauricio
+        X2_circ = Circuit()
+        X2_circ.add_gate_at([n_total], 'PrepareXPlus')
+        for pair in qubits:
+            X2_circ.add_gate_at([n_total,n_code*pair[0]+pair[1]], 'CX')
+        X2_circ.add_gate_at([n_total], 'ImX')
+        X2_circ.add_gate_at([n_total], 'MeasureX')
+        X2_circ.to_ancilla([n_total])  
+        X2_circ = Encoded_Gate('X2', [X2_circ]).circuit_wrap()
+        XX_circ.join_circuit(X2_circ)
+
+        # measure the w-4 operator
+        #qubits = [[1,4], [2,4], [1,5], [2,5]]   # Alejandro
+        qubits = [[1,3], [2,3], [1,5], [2,5]]   # Mauricio
+        X4_circ = Circuit()
+        X4_circ.add_gate_at([n_total], 'PrepareXPlus')
+        for pair in qubits:
+            X4_circ.add_gate_at([n_total,n_code*pair[0]+pair[1]], 'CX')
+        X4_circ.add_gate_at([n_total], 'ImX')
+        X4_circ.add_gate_at([n_total], 'MeasureX')
+        X4_circ.to_ancilla([n_total])  
+        X4_circ = Encoded_Gate('X4', [X4_circ]).circuit_wrap()
+        XX_circ.join_circuit(X4_circ)
+            
+        # FT measurement of X stabs on target (1) and ancilla (2)
+        XX_circ.join_circuit(Flag_Correct.QECX_FT_lattsurg(1))
+        XX_circ.join_circuit(Flag_Correct.QECX_FT_lattsurg(2))
+
+        # measure the w-2 operator
+        #qubits = [[1,6], [2,6]]   # Alejandro
+        qubits = [[1,1], [2,1]]   # Mauricio
+        X2_circ = Circuit()
+        X2_circ.add_gate_at([n_total], 'PrepareXPlus')
+        for pair in qubits:
+            X2_circ.add_gate_at([n_total,n_code*pair[0]+pair[1]], 'CX')
+        X2_circ.add_gate_at([n_total], 'ImX')
+        X2_circ.add_gate_at([n_total], 'MeasureX')
+        X2_circ.to_ancilla([n_total])  
+        X2_circ = Encoded_Gate('X2', [X2_circ]).circuit_wrap()
+        XX_circ.join_circuit(X2_circ)
+
+        # measure the w-4 operator
+        #qubits = [[1,4], [2,4], [1,5], [2,5]]   # Alejandro
+        qubits = [[1,3], [2,3], [1,5], [2,5]]   # Mauricio
+        X4_circ = Circuit()
+        X4_circ.add_gate_at([n_total], 'PrepareXPlus')
+        for pair in qubits:
+            X4_circ.add_gate_at([n_total,n_code*pair[0]+pair[1]], 'CX')
+        X4_circ.add_gate_at([n_total], 'ImX')
+        X4_circ.add_gate_at([n_total], 'MeasureX')
+        X4_circ.to_ancilla([n_total])  
+        X4_circ = Encoded_Gate('X4', [X4_circ]).circuit_wrap()
+        XX_circ.join_circuit(X4_circ)
+        
+        # nonFT measurement of X stabs on target (1) and ancilla (2)
+        XX_circ.join_circuit(Flag_Correct.QECX_nonFT_lattsurg(1))
+        XX_circ.join_circuit(Flag_Correct.QECX_nonFT_lattsurg(2))
+
+        # measure the w-2 operator
+        #qubits = [[1,6], [2,6]]   # Alejandro
+        qubits = [[1,1], [2,1]]   # Mauricio
+        X2_circ = Circuit()
+        X2_circ.add_gate_at([n_total], 'PrepareXPlus')
+        for pair in qubits:
+            X2_circ.add_gate_at([n_total,n_code*pair[0]+pair[1]], 'CX')
+        X2_circ.add_gate_at([n_total], 'ImX')
+        X2_circ.add_gate_at([n_total], 'MeasureX')
+        X2_circ.to_ancilla([n_total])  
+        X2_circ = Encoded_Gate('X2', [X2_circ]).circuit_wrap()
+        XX_circ.join_circuit(X2_circ)
+
+        # measure the w-4 operator
+        #qubits = [[1,4], [2,4], [1,5], [2,5]]   # Alejandro
+        qubits = [[1,3], [2,3], [1,5], [2,5]]   # Mauricio
+        X4_circ = Circuit()
+        X4_circ.add_gate_at([n_total], 'PrepareXPlus')
+        for pair in qubits:
+            X4_circ.add_gate_at([n_total,n_code*pair[0]+pair[1]], 'CX')
+        X4_circ.add_gate_at([n_total], 'ImX')
+        X4_circ.add_gate_at([n_total], 'MeasureX')
+        X4_circ.to_ancilla([n_total])  
+        X4_circ = Encoded_Gate('X4', [X4_circ]).circuit_wrap()
+        XX_circ.join_circuit(X4_circ)
+   
+        XX_circ = Encoded_Gate('MeasureXX_flags', [XX_circ]).circuit_wrap()
+
+        return XX_circ
+
+
+
 class Bare_Correct:
     '''
     Measure stabilizers with a bare ancilla for each stabilizer, no cat states.
