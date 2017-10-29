@@ -59,8 +59,9 @@ class Quantum_Operation(object):
             circuit = self.circuits[circuit]
 
         n_a_q = len(circuit.ancilla_qubits())
-        #print 'n_data =', self.n_d_q
-        #print 'n_anc =', n_a_q
+        print 'n_data =', self.n_d_q
+        print 'n_anc =', n_a_q
+        print self.stabs
 
         circ_chp = chper.Chper(circ=circuit,
                                num_d_qub=self.n_d_q,
@@ -393,8 +394,8 @@ class Measure_2_logicals(Quantum_Operation):
         tricky_indices = [4,5,6]  # using Alejandro's indexing
         
         # default values
-        corr_nonanc = 'normal'
-        corr_anc = False
+        #corr_nonanc = 'normal'
+        #corr_anc = False
 
         # For now we will assume that there is no QEC step on the ancilla before
         first_subcirc_i = 0
@@ -444,16 +445,62 @@ class Measure_2_logicals(Quantum_Operation):
         high_w += [self.run_one_circ(first_subcirc_i+5).values()[0][0]]
         print 'high_w2 =', high_w[1]
             
+        error_det_total = error_det_targ or error_det_anc
+
         # if the total parity stayed the same    
         if low_w[0]*high_w[0] == low_w[1]*high_w[1]:
         
-            if low_w[0] != low_w[1]:
-                output = [low_w, high_w, [s_targ1], [s_anc1]] 
-                output += [[f_targ1], [f_anc1], 'normal', 'normal', True]
-                return tuple(output)
+            # if both operators changed parities, error was after
+            #if low_w[0] != low_w[1]:
+            #    corr_targ, corr_anc = 'normal', 'normal'
                 
+            # if the location of the error is unknown, we measure the
+            # 2 boundary stabilizers again nonFT  (target)
             if corr_targ == 'unknown':
-                print 'HOLA'
+                QECX_supracirc = self.circuits[first_subcirc_i+6]
+                QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
+                QECX_targ = QEC_with_flags([self.stabs, self.destabs],
+                                           QECX_circs, self.chp_loc)
+                corr_targ = QECX_targ.run_QECX_nonFT(s_targ1)
+                self.stabs, self.destabs = QECX_anc.stabs[:], QECX_anc.destabs[:]
+                corr_anc = 'normal'
+ 
+            # if the location of the error is unknown, we measure the
+            # 2 boundary stabilizers again nonFT  (ancilla)
+            elif corr_anc == 'unknown':
+                QECX_supracirc = self.circuits[first_subcirc_i+7]
+                QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
+                QECX_anc = QEC_with_flags([self.stabs, self.destabs],
+                                           QECX_circs, self.chp_loc)
+                corr_anc = QECX_anc.run_QECX_nonFT(s_anc1)
+                self.stabs, self.destabs = QECX_anc.stabs[:], QECX_anc.destabs[:]
+                corr_targ = 'normal'     
+            
+            # I could join the first and fourth options.
+            else:
+                corr_targ, corr_anc = 'normal', 'normal'
+                
+            output = [low_w, high_w, [s_targ1], [s_anc1]] 
+            output += [[f_targ1], [f_anc1], corr_targ, corr_anc, error_det_total]
+            return tuple(output)
+
+
+        # if the parities changed
+        else:
+            
+            # if the outcomes of the w-2 operators were different
+            if low_w[0] != low_w[1]:
+                low_w += [self.run_one_circ(first_subcirc_i+8).values()[0][0]]
+            
+            # if the outcomes of the w-4 operators were different
+            else:
+                high_w += [self.run_one_circ(first_subcirc_i+9).values()[0][0]]
+                
+            output = [low_w, high_w, [s_targ1], [s_anc1]] 
+            output += [[f_targ1], [f_anc1], 'normal', 'normal', error_det_total]
+            return tuple(output)
+
+
 
 class QEC_d3(Quantum_Operation):
     '''
@@ -1983,6 +2030,30 @@ class QEC_with_flags(Quantum_Operation):
 
 
 
+    def run_QECX_nonFT(self, previous_syn):
+        '''
+        We only measure the 2 stabilizers on the boundary.
+        If the syndrome doesn't coincide with the first
+        one, we know the error occurred after the XX measurement
+        and the correction is normal.
+        '''
+
+        # measure the first stabilizer
+        syn2 = self.run_one_circ(0).values()[0][0]
+
+        # if this does not coincide with the previous one, we're done
+        if syn2 != previous_syn[1]:
+            return 'normal'
+
+        else:
+            syn3 = self.run_one_circ(1).values()[0][0]
+            if syn3 != previous_syn[2]:
+                return 'normal'
+            else:
+                return 'alternative'
+
+
+
 class Supra_Circuit(object):
     '''
     a supra-circuit is composed of several quantum operations.
@@ -2013,7 +2084,9 @@ class Supra_Circuit(object):
  
         
         if quant_gate.gate_name[:8] == 'JointQEC':
-            
+           
+            print 'Running JointQEC'
+
             stab_kind = quant_gate.gate_name[-1]
         
             quant_circs = [g.circuit_list[0] for g in sub_circ.gates]
@@ -2081,7 +2154,10 @@ class Supra_Circuit(object):
 
             quant_circs = [g.circuit_list[0] for g in sub_circ.gates]
             q_oper = Measure_2_logicals(self.state[:], quant_circs, self.chp_loc)
-            q_oper.run_XX_flags()
+            output = q_oper.run_XX_flags()
+            self.state = [q_oper.stabs[:], q_oper.destabs[:]]
+            
+            return output
 
 
         else:
@@ -2092,6 +2168,9 @@ class Supra_Circuit(object):
             if quant_gate.gate_name[:7] == 'Measure':
                 sub_circ.to_ancilla([q.qubit_id for q in sub_circ.qubits()])
                 q_oper.n_d_q = len(q_oper.stabs) - len(sub_circ.ancilla_qubits())
+            
+            #brow.from_circuit(sub_circ, True)
+
             output_dict = q_oper.run_one_circ(0)            
 
             self.state = [q_oper.stabs[:], q_oper.destabs[:]]
@@ -2116,7 +2195,7 @@ class CNOT_latt_surg(Supra_Circuit):
 
 
         for q_oper in self.quant_opers:
-            #print q_oper.gate_name
+            print q_oper.gate_name
             output = self.run_one_oper(q_oper)
            
 
@@ -2151,7 +2230,33 @@ class CNOT_latt_surg(Supra_Circuit):
 
             
             elif q_oper.gate_name == 'MeasureXX_flags':
-                pass
+                #print output
+                low_w, high_w = output[0], output[1]
+                parM = (low_w[-1]+high_w[-1])%2
+                corr_targ, corr_anc = output[6], output[7]
+                print corr_targ, corr_anc
+                print 'parity =', parM
+                clause1 = corr_targ == 'normal' and parM == 1
+                clause2 = corr_targ == 'alternative' and parM == 0
+               
+                # if either clause is True, we apply logical Z on ctrl
+                if (clause1 or clause2):
+                    log_corr = ['Z' for i in range(7)] + ['I' for i in range(7*2)]
+                    corr_state = qfun.update_stabs(self.state[0][:],
+                                                   self.state[1][:],
+                                                   log_corr)
+                    self.state = [corr_state[0][:], corr_state[1][:]]
+                   
+                # if the ancilla correction is alternative, there was an error
+                # on the ancilla qubit before the measurement of XX and we apply
+                # logical Z on the ancilla
+                if corr_anc == 'alternative':
+                    log_corr = ['I' for i in range(7*2)] + ['Z' for i in range(7)]
+                    corr_state = qfun.update_stabs(self.state[0][:],
+                                                   self.state[1][:],
+                                                   log_corr)
+                    self.state = [corr_state[0][:], corr_state[1][:]]
+                    
 
 
 

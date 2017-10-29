@@ -1040,6 +1040,28 @@ class Flag_Correct:
 
 
 
+    @classmethod
+    def latt_surg_CNOT(cls, initial_I):
+        '''
+        '''
+        n_code = 7
+        CNOT_circ = Circuit()
+        
+        if initial_I:
+            I_circuit = Circuit()
+            for i in range(3*n_code):
+                I_circuit.add_gate_at([i], 'I')
+            I_circuit = Encoded_Gate('Logical_I', [I_circuit]).circuit_wrap()
+            #CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
+            CNOT_circ.join_circuit(I_circuit)
+
+        measureXX_circ = Flag_Correct.measure_XXlogical()
+        CNOT_circ.join_circuit(measureXX_circ)
+
+        return CNOT_circ
+
+
+
 class Bare_Correct:
     '''
     Measure stabilizers with a bare ancilla for each stabilizer, no cat states.

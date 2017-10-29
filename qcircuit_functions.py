@@ -867,7 +867,7 @@ def create_I_circuit(n_qubits):
 
 
 def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
-                          EC_ctrl_targ=False, FT=True):
+                          EC_ctrl_targ=False, FT=True, flag=False):
     '''
     creates the whole supra-circuit for the lattice-surgery CNOT
     exclusive for the Steane code (distance-3 color code)
@@ -917,6 +917,10 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
     #XX_qubits = [[[1,3], [2,3], [1,5], [2,5]], [[1,1], [2,1]]]
     #XX_qubits = [[[1,1], [1,3], [1,5], [2,1], [2,3], [2,5]]]
     measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X', True, True, True)
+    
+    if flag:
+        measureXX_circ = cor.Flag_Correct.measure_XXlogical()
+    
     CNOT_circ.join_circuit_at(range(n_code, 3*n_code), measureXX_circ)
 
     #I_circuit = create_I_circuit(3*n_code)
