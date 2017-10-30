@@ -59,9 +59,9 @@ class Quantum_Operation(object):
             circuit = self.circuits[circuit]
 
         n_a_q = len(circuit.ancilla_qubits())
-        print 'n_data =', self.n_d_q
-        print 'n_anc =', n_a_q
-        print self.stabs
+        #print 'n_data =', self.n_d_q
+        #print 'n_anc =', n_a_q
+        #print self.stabs
 
         circ_chp = chper.Chper(circ=circuit,
                                num_d_qub=self.n_d_q,
@@ -405,11 +405,11 @@ class Measure_2_logicals(Quantum_Operation):
 
         # (2) Measure low-weight operator first time
         low_w += [self.run_one_circ(first_subcirc_i).values()[0][0]]
-        print 'low_w1 =', low_w[0]
+        #print 'low_w1 =', low_w[0]
         
         # (3) Measure high-weight operator first time
         high_w += [self.run_one_circ(first_subcirc_i+1).values()[0][0]]
-        print 'high_w1 =', high_w[0]
+        #print 'high_w1 =', high_w[0]
 
         #print 'State after high-w operator:'
         #print self.stabs
@@ -439,11 +439,11 @@ class Measure_2_logicals(Quantum_Operation):
 
         # (6) Measure low-weight operator second time
         low_w += [self.run_one_circ(first_subcirc_i+4).values()[0][0]]
-        print 'low_w2 =', low_w[1]
+        #print 'low_w2 =', low_w[1]
         
         # (7) Measure high-weight operator second time
         high_w += [self.run_one_circ(first_subcirc_i+5).values()[0][0]]
-        print 'high_w2 =', high_w[1]
+        #print 'high_w2 =', high_w[1]
             
         error_det_total = error_det_targ or error_det_anc
 
@@ -1991,7 +1991,7 @@ class QEC_with_flags(Quantum_Operation):
         # first we measure the stabilizer that doesn't "touch" the boundary
         output_first = self.run_one_circ(0).values()
         syn1, flag1 = output_first[0][0], output_first[1][0]
-        
+    
         # if an error is detected, we're done
         if syn1==1 or flag1==1:
             total_syn, total_flag = [syn1,0,0], [flag1,0,0]
@@ -2085,7 +2085,7 @@ class Supra_Circuit(object):
         
         if quant_gate.gate_name[:8] == 'JointQEC':
            
-            print 'Running JointQEC'
+            #print 'Running JointQEC'
 
             stab_kind = quant_gate.gate_name[-1]
         
@@ -2156,7 +2156,8 @@ class Supra_Circuit(object):
             q_oper = Measure_2_logicals(self.state[:], quant_circs, self.chp_loc)
             output = q_oper.run_XX_flags()
             self.state = [q_oper.stabs[:], q_oper.destabs[:]]
-            
+            #print self.state[0] 
+
             return output
 
 
@@ -2195,7 +2196,7 @@ class CNOT_latt_surg(Supra_Circuit):
 
 
         for q_oper in self.quant_opers:
-            print q_oper.gate_name
+            #print q_oper.gate_name
             output = self.run_one_oper(q_oper)
            
 
@@ -2234,8 +2235,9 @@ class CNOT_latt_surg(Supra_Circuit):
                 low_w, high_w = output[0], output[1]
                 parM = (low_w[-1]+high_w[-1])%2
                 corr_targ, corr_anc = output[6], output[7]
-                print corr_targ, corr_anc
-                print 'parity =', parM
+                #print corr_targ, corr_anc
+                #print 'parity =', parM
+                #print output[8]
                 clause1 = corr_targ == 'normal' and parM == 1
                 clause2 = corr_targ == 'alternative' and parM == 0
                

@@ -100,7 +100,7 @@ def get_syn_with_flags(out_dict,
 
 
 
-def add_errors_after_gates(circ, gates_indexes, errors_to_add=['XX']):
+def add_errors_after_gates(circ, gates_indexes, errors_to_add=['XX'], print_circ=False):
     '''
     Inserts specific errors after specific gates.
     circ:  the circuit onto which we want to add the errors.
@@ -108,6 +108,10 @@ def add_errors_after_gates(circ, gates_indexes, errors_to_add=['XX']):
                     add the errors (a list).
     errors_to_add:  the errors to add (a list of same length)
     '''
+
+    #print 'gates indexes =', gates_indexes
+    if print_circ:
+        brow.from_circuit(circ, True)
 
     # Instead of gates_indexes.sort(), we apply a conditional sorting.
     if gates_indexes[0] > gates_indexes[-1]:
@@ -973,3 +977,64 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
     CNOT_circ.join_circuit_at(range(2*n_code, 3*n_code), meas_circ)
 
     return CNOT_circ
+
+
+
+def add_specific_error_config_CNOT(CNOT_circ, errors_to_add, gates_indexes):
+    '''
+    '''
+
+    for i in range(len(errors_to_add)):
+        error_event = errors_to_add[i]
+        gate_index = gates_indexes[i]
+
+        #print 'error event =', error_event
+        #print 'gate index =', gate_index
+
+        # Very non-elegant, but I'm in a hurry.  MGA: 10/30/17.
+        if len(gate_index) == 2:
+            error_circ = CNOT_circ.gates[gate_index[0]].circuit_list[0]
+        elif len(gate_index) == 3:
+            circ1 = CNOT_circ.gates[gate_index[0]].circuit_list[0]
+            error_circ = circ1.gates[gate_index[1]].circuit_list[0]
+        elif len(gate_index) == 4:
+            circ1 = CNOT_circ.gates[gate_index[0]].circuit_list[0]
+            circ2 = circ1.gates[gate_index[1]].circuit_list[0]
+            error_circ = circ2.gates[gate_index[2]].circuit_list[0]
+
+        print_circ = False
+        #if gate_index == (1,3,0,8):  print_circ = True
+        
+        add_errors_after_gates(error_circ, [gate_index[-1]], [error_event], print_circ)
+
+    return
+
+
+
+def exhaustive_search_subset_latt_surg(subset, one_q_gates, two_q_gates,
+                                       one_q_errors_type=['X'],
+                                       two_q_errors_type=['IX','IX','XX']):
+    '''
+    At the end I decided not to implement this as a separate function.
+    It would be nice to implement it as an iterator.
+    '''
+
+    n_one_q_errors = subset[0]
+    n_two_q_errors = subset[1]
+
+    total_indexes, total_errors = get_total_indexes_one_circ(subset,
+                                                             one_q_gates,
+                                                             two_q_gates,
+                                                             one_q_errors_type,
+                                                             two_q_errors_type)
+    
+    final_error_count, final_failure_count = 0, 0
+    for i in range(len(total_indexes)):
+        print total_errors[i], total_indexes[i]
+        CNOT_circ_copy = create_latt_surg_CNOT(False,True,True,False,True,True)
+        add_specific_error_config_CNOT(CNOT_circ_copy, total_errors[i], total_indexes[i])
+
+        #if i==0:
+        #    brow.from_circuit(CNOT_circ_copy, True)
+        
+        
