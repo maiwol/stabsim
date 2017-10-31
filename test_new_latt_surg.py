@@ -9,6 +9,7 @@ from visualizer import browser_vis as brow
 
 
 # chp location
+n_code = 7
 chp_loc = './chp_extended'
 error_model = 'standard'
 p1, p2, p_meas = 0.001, 0.001, 0.001  # these don't matter for the fast sampler
@@ -34,6 +35,7 @@ initial_state = qfun.combine_stabs(all_stabs, all_destabs)
 #CNOT_circ = corr.Flag_Correct.latt_surg_CNOT(True)
 CNOT_circ = qfun.create_latt_surg_CNOT(False,True,True,False,True,True)
 #brow.from_circuit(CNOT_circ, True)
+#sys.exit(0)
 
 # Get list of all 1-q and 2-q gates
 one_q_gates, two_q_gates = wrapper.gates_list_CNOT(CNOT_circ, error_dict.keys())
@@ -54,7 +56,7 @@ for i in range(len(total_indexes)):
     print total_errors[i], total_indexes[i]
     CNOT_circ_copy = qfun.create_latt_surg_CNOT(False,True,True,False,True,True)
     qfun.add_specific_error_config_CNOT(CNOT_circ_copy, total_errors[i], total_indexes[i])
-    
+   
     QEC_object = qcirc.CNOT_latt_surg(initial_state, CNOT_circ_copy, 'Steane', chp_loc)
     QEC_object.run_all_gates()
     final_stabs, final_destabs = QEC_object.state[0][:], QEC_object.state[1][:]
@@ -62,12 +64,16 @@ for i in range(len(total_indexes)):
     # Determine if there is an error (both failures and correctable errors)
     for stab in final_stabs:
         if stab[0] != '+':
+            #print 'ERROR'
             final_error_count += 1
             break
 
-    # do perfect EC
+    # do perfect EC on ctrl and target logical qubits
     corr_circ = qfun.create_EC_subcircs('Steane', False, False, False, True)
-    final_state = (final_stabs, final_destabs)
+    corr_circ2 = qfun.create_EC_subcircs('Steane', False, False, False, True)
+    corr_circ.join_circuit_at(range(n_code,2*n_code), corr_circ2)
+
+    final_state = (final_stabs[:], final_destabs[:])
     bare_anc = True
     supra_circ = qcirc.CNOT_latt_surg(final_state, corr_circ, 'Steane', chp_loc, bare_anc)
     supra_circ.run_all_gates()

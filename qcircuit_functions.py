@@ -920,12 +920,22 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
     XX_qubits = [[[1,1], [2,1]], [[1,3], [2,3], [1,5], [2,5]]]
     #XX_qubits = [[[1,3], [2,3], [1,5], [2,5]], [[1,1], [2,1]]]
     #XX_qubits = [[[1,1], [1,3], [1,5], [2,1], [2,3], [2,5]]]
-    measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X', True, True, True)
+    #measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X', True, True, True)
     
     if flag:
         measureXX_circ = cor.Flag_Correct.measure_XXlogical()
+        jointQEC_circ = cor.Flag_Correct.joint_QECZ([1,2])
+    
+    else:
+        measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X', True, True, True)
+        jointQEC_circ = create_joint_EC(Is_after2q, 'Z', non_anc_qubit='targ')
     
     CNOT_circ.join_circuit_at(range(n_code, 3*n_code), measureXX_circ)
+    
+    # (3) Perform joint QEC on target and ancilla 
+    # (only if XX and XXXX were measured) 
+    #jointQEC_circ = create_joint_EC(Is_after2q, 'Z', non_anc_qubit='targ')
+    CNOT_circ.join_circuit_at(range(n_code, 3*n_code), jointQEC_circ)
 
     #I_circuit = create_I_circuit(3*n_code)
     #CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
@@ -936,8 +946,8 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
    
     # (3) Perform joint QEC on target and ancilla 
     # (only if XX and XXXX were measured) 
-    jointQEC_circ = create_joint_EC(Is_after2q, 'Z', non_anc_qubit='targ')
-    CNOT_circ.join_circuit_at(range(n_code, 3*n_code), jointQEC_circ)
+    #jointQEC_circ = create_joint_EC(Is_after2q, 'Z', non_anc_qubit='targ')
+    #CNOT_circ.join_circuit_at(range(n_code, 3*n_code), jointQEC_circ)
     
     #I_circuit = create_I_circuit(3*n_code)
     #CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)

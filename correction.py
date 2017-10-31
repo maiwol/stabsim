@@ -855,10 +855,76 @@ class Flag_Correct:
         return complete_circ
 
 
+    @classmethod
+    def QECZ_total(cls, log_qubit=0):
+        '''
+        One round of stabilizer with flags + one round without flags
+        Standard order of stabilizers
+        Used for lattice surgery
+        log_qubit: 0 (ctrl); 1 (targ); 2 (anc)
+        '''
+        
+        n_code = 7
+        n_total = 7*3
+        stabs = [[3,4,5,6], [1,2,5,6], [0,2,4,6]]
+
+        QEC_circ = Circuit()
+        for i_stab in range(len(stabs)):
+            stab_circ = Circuit()
+            stab_circ.add_gate_at([n_total], 'PrepareXPlus')
+            stab_circ.add_gate_at([n_total+1], 'PrepareZPlus')
+            for i in range(len(stabs[i_stab])):
+                q_index = stabs[i_stab][i]
+                data_index = log_qubit*n_code + q_index
+                stab_circ.add_gate_at([n_total, data_index], 'CZ')
+                if i==0 or i==2:
+                    stab_circ.add_gate_at([n_total, n_total+1], 'CX')
+            stab_circ.add_gate_at([n_total], 'ImX')
+            stab_circ.add_gate_at([n_total], 'MeasureX')
+            stab_circ.add_gate_at([n_total+1], 'ImZ')
+            stab_circ.add_gate_at([n_total+1], 'MeasureZ')
+        
+            stab_circ.to_ancilla(range(n_total, n_total+2))
+            stab_circ = Encoded_Gate('Stab_FT%i'%i_stab, [stab_circ]).circuit_wrap()
+            QEC_circ.join_circuit(stab_circ)
+
+        for i_stab in range(len(stabs)):
+            stab_circ = Circuit()
+            stab_circ.add_gate_at([n_total], 'PrepareXPlus')
+            for q_index in stabs[i_stab]:
+                data_index = log_qubit*n_code + q_index
+                stab_circ.add_gate_at([n_total, data_index], 'CZ')
+            stab_circ.add_gate_at([n_total], 'ImX')
+            stab_circ.add_gate_at([n_total], 'MeasureX')
+            
+            stab_circ.to_ancilla([n_total])
+            stab_circ = Encoded_Gate('Stab_nonFT%i'%i_stab, [stab_circ]).circuit_wrap()
+            QEC_circ.join_circuit(stab_circ)
+
+        QEC_circ = Encoded_Gate('ECZ_total', [QEC_circ]).circuit_wrap()
+       
+        return QEC_circ
+
+
+
+    @classmethod
+    def joint_QECZ(cls, log_qubits=[0,1]):
+        '''
+        '''
+        QEC_circ = Flag_Correct.QECZ_total(log_qubits[0])
+        QEC_circ2 = Flag_Correct.QECZ_total(log_qubits[1])
+        QEC_circ.join_circuit(QEC_circ2)
+        QEC_circ = Encoded_Gate('JointQECZ_flags', [QEC_circ]).circuit_wrap()
+
+        return QEC_circ
+
+
 
     @classmethod
     def QECX_FT_lattsurg(cls, log_qubit=0):
         '''
+        This is the first QEC performed during the measurement of the XX operator.
+        For this reason, we don't measure all the stabilizers a second time.
         log_qubit: 0 (ctrl); 1 (targ); 2 (anc)
         '''
         
@@ -909,6 +975,7 @@ class Flag_Correct:
     @classmethod
     def QECX_nonFT_lattsurg(cls, log_qubit=0):
         '''
+        This is the second QEC performed during the measurement of the XX operator.
         '''
         
         n_code = 7

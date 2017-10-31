@@ -1530,7 +1530,17 @@ def create_stabs_and_destabs(circ, chp_location, CHP_IO_files=True):
 
     return final_stabs, final_destabs
 
-    
+
+
+#def stabilizer_syndrome_steane(bin_error):
+#    '''
+#    outputs the syndrome based on the bin_error
+#    '''
+#    H = np.array([[0,0,1],[0,1,0],[0,1,1],[1,0,0],[1,0,1],[1,1,0],[1,1,1]])
+#    bin_error = np.array(bin_error)
+#    syn = np.dot(bin_error,H)
+#    return syn
+
 
 def measurement_parity_steane(meas_outcomes):
     """meas_outcomes needs to be a list of seven bits."""
@@ -3347,6 +3357,29 @@ def gates_list_CNOT(CNOT_circuits, faulty_gates_names):
                                 two_qubit_gates.append((i,j,k))
                             
                 elif in_gate1.gate_name[:2] == 'EC':
+                    for k in range(len(in_gate1.circuit_list[0].gates)):
+                        in_gate2 = in_gate1.circuit_list[0].gates[k]
+                        for l in range(len(in_gate2.circuit_list[0].gates)):
+                            in_gate3 = in_gate2.circuit_list[0].gates[l]
+                            if in_gate3.gate_name in faulty_gates_names:
+                                if len(in_gate3.qubits) == 1:
+                                    single_qubit_gates.append((i,j,k,l))
+                                elif len(in_gate3.qubits) == 2:
+                                    two_qubit_gates.append((i,j,k,l))
+
+        elif supra_gate.gate_name == 'MeasureXX_flags':
+            for j in range(len(supra_gate.circuit_list[0].gates)):
+                in_gate1 = supra_gate.circuit_list[0].gates[j]
+                if in_gate1.gate_name[0] == 'X':
+                    for k in range(len(in_gate1.circuit_list[0].gates)):
+                        in_gate2 = in_gate1.circuit_list[0].gates[k]
+                        if in_gate2.gate_name in faulty_gates_names:
+                            if len(in_gate2.qubits) == 1:
+                                single_qubit_gates.append((i,j,k))
+                            elif len(in_gate2.qubits) == 2:
+                                two_qubit_gates.append((i,j,k))
+                
+                elif in_gate1.gate_name[:4] == 'QECX':
                     for k in range(len(in_gate1.circuit_list[0].gates)):
                         in_gate2 = in_gate1.circuit_list[0].gates[k]
                         for l in range(len(in_gate2.circuit_list[0].gates)):

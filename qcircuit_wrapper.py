@@ -391,7 +391,7 @@ class Measure_2_logicals(Quantum_Operation):
         '''
         '''    
         
-        tricky_indices = [4,5,6]  # using Alejandro's indexing
+        #tricky_indices = [4,5,6]  # using Alejandro's indexing
         
         # default values
         #corr_nonanc = 'normal'
@@ -798,6 +798,10 @@ class QEC_d3(Quantum_Operation):
             data_errors2 += [QEC_func(i+3, code, stab_kind)]
             #print 'errors2 =', data_errors2
 
+        #if stab_kind == 'Z':
+        #    print 'errors1 =', data_errors1
+        #    print 'errors2 =', data_errors2
+
         # if the outcomes of the 2 stabs measurements
         # don't coincide, do it a third time
         if data_errors1[0] != data_errors1[1]:
@@ -811,10 +815,18 @@ class QEC_d3(Quantum_Operation):
         w2 = 7 - data_error2.count('I')
 
         if (w1+w2) == 2:
+            #if stab_kind == 'Z':
+            #    print 'Im here'
             data_error1 = ['I' for i in range(7)]
             data_error1[error_index] = Pauli_error
             data_error2 = ['I' for i in range(7)]
             data_error2[error_index] = Pauli_error
+            
+            #if data_error1[error_index] == 'I':
+            #    bin_error1 = [0 if oper=='I' else 1 for oper in data_error1]
+            #    bin_error1[error_index] = 1
+            #    print bin_error1
+            #    print st.decode_meas_Steane(bin_error1)
 
             if stab_kind == 'Z':
                 log_corr = ['I' for i in range(7)] + data_error1 + data_error2
@@ -2054,6 +2066,84 @@ class QEC_with_flags(Quantum_Operation):
 
 
 
+    def run_jointQECZ(self, error_det, inflags1, inflags2):
+        '''
+        error_det:  True if an error has already been detected
+                    False otherwise.
+                    If error_det is True, then we just run the
+                    stabilizers 1 time nonFT.
+        flags1:  the previous flags for the first logical qubit
+        flags2:  the previous flags for the second logical qubit
+        '''
+
+        print error_det, inflags1, inflags2
+
+        # undefined stab is the index of the stabilizer that is undefined.
+        # With the current numbering, it's the second stab (stab 1)
+        undefined_stab = 1
+
+        outflags1, outflags2 = [], []
+        if error_det:
+            # In this case, we just run the non-FT circuits
+
+            # First logical qubit
+            syn1 = []
+            for i in range(3,6):
+                syn1 += [self.run_one_circ(i).values()[0][0]]
+            
+            # Second logical qubit
+            syn2 = []
+            for i in range(9,12):
+                syn2 += [self.run_one_circ(i).values()[0][0]]
+
+        else:
+            # In this case, both inflags are [0,0,0]
+
+            # First logical qubit
+            error_det1 = False
+            syn1 = []
+            first_elem = 0
+            for i in range(first_elem,first_elem+3):
+                out_run = self.run_one_circ(i).values()
+                syn1 += [out_run[0][0]]
+                outflags1 += [out_run[1][0]]
+                if (syn1==1 and i!=(first_elem+undefined_stab)) or outflags1==1:
+                    # Really, if a flag gets triggered, we could STOP right there.
+                    # Change it later on
+                    error_det1 = True
+                    break
+            if error_det1:
+                syn1 = []
+                for i in range(3,6):
+                    syn1 += [self.run_one_circ(i).values()[0][0]]
+                    
+            # Second logical qubit
+            error_det2 = False
+            syn2, outflags2 = [], []
+            first_elem = 6
+            for i in range(first_elem,first_elem+3):
+                out_run = self.run_one_circ(i).values()
+                syn2 += [out_run[0][0]]
+                outflags2 += [out_run[1][0]]
+                if (syn2==1 and i!=(first_elem+undefined_stab)) or outflags2==1:
+                    error_det2 = True
+                    break
+            if error_det2:
+                syn2 = []
+                for i in range(9,12):
+                    syn2 += [self.run_one_circ(i).values()[0][0]]
+
+            error_det = error_det1 or error_det2
+        
+        outflags1 += [0 for i in range(3-len(outflags1))]
+        outflags2 += [0 for i in range(3-len(outflags2))]
+        print error_det
+        print syn1, syn2
+        print outflags1, outflags2
+        sys.exit(0)
+
+
+
 class Supra_Circuit(object):
     '''
     a supra-circuit is composed of several quantum operations.
@@ -2082,8 +2172,18 @@ class Supra_Circuit(object):
    
         sub_circ = quant_gate.circuit_list[0]
  
-        
-        if quant_gate.gate_name[:8] == 'JointQEC':
+        if quant_gate.gate_name == 'JointQECZ_flags':
+
+            quant_circs = [g.circuit_list[0] for g in sub_circ.gates]
+            quant_circs0 = [g.circuit_list[0] for g in quant_circs[0].gates]
+            quant_circs1 = [g.circuit_list[0] for g in quant_circs[1].gates]
+            reordered_quant_circs = quant_circs0 + quant_circs1
+
+            q_oper = QEC_with_flags(self.state[:], reordered_quant_circs, self.chp_loc) 
+            q_oper.run_jointQECZ(self.error_det, self.flags1[-1], self.flags2[-1])
+
+
+        elif quant_gate.gate_name[:8] == 'JointQEC':
            
             #print 'Running JointQEC'
 
@@ -2234,6 +2334,8 @@ class CNOT_latt_surg(Supra_Circuit):
                 #print output
                 low_w, high_w = output[0], output[1]
                 parM = (low_w[-1]+high_w[-1])%2
+                self.flags1, self.flags2 = output[4], output[5]
+                self.error_det = output[8]
                 corr_targ, corr_anc = output[6], output[7]
                 #print corr_targ, corr_anc
                 #print 'parity =', parM
