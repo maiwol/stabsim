@@ -1040,12 +1040,8 @@ class Flag_Correct:
         X4_circ.to_ancilla([n_total])  
         X4_circ = Encoded_Gate('X4', [X4_circ]).circuit_wrap()
         XX_circ.join_circuit(X4_circ)
-            
-        # FT measurement of X stabs on target (1) and ancilla (2)
-        XX_circ.join_circuit(Flag_Correct.QECX_FT_lattsurg(1))
-        XX_circ.join_circuit(Flag_Correct.QECX_FT_lattsurg(2))
-
-        # measure the w-2 operator
+        
+        # measure the w-2 operator a second time
         #qubits = [[1,6], [2,6]]   # Alejandro
         qubits = [[1,1], [2,1]]   # Mauricio
         X2_circ = Circuit()
@@ -1058,7 +1054,7 @@ class Flag_Correct:
         X2_circ = Encoded_Gate('X2', [X2_circ]).circuit_wrap()
         XX_circ.join_circuit(X2_circ)
 
-        # measure the w-4 operator
+        # measure the w-4 operator a second time
         #qubits = [[1,4], [2,4], [1,5], [2,5]]   # Alejandro
         qubits = [[1,3], [2,3], [1,5], [2,5]]   # Mauricio
         X4_circ = Circuit()
@@ -1071,9 +1067,13 @@ class Flag_Correct:
         X4_circ = Encoded_Gate('X4', [X4_circ]).circuit_wrap()
         XX_circ.join_circuit(X4_circ)
         
+        # FT measurement of X stabs on target (1) and ancilla (2)
+        XX_circ.join_circuit(Flag_Correct.QECX_FT_lattsurg(1))
+        XX_circ.join_circuit(Flag_Correct.QECX_FT_lattsurg(2))
+
         # nonFT measurement of X stabs on target (1) and ancilla (2)
-        XX_circ.join_circuit(Flag_Correct.QECX_nonFT_lattsurg(1))
-        XX_circ.join_circuit(Flag_Correct.QECX_nonFT_lattsurg(2))
+        #XX_circ.join_circuit(Flag_Correct.QECX_nonFT_lattsurg(1))
+        #XX_circ.join_circuit(Flag_Correct.QECX_nonFT_lattsurg(2))
 
         # measure the w-2 operator
         #qubits = [[1,6], [2,6]]   # Alejandro

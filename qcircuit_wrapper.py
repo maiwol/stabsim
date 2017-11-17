@@ -411,95 +411,86 @@ class Measure_2_logicals(Quantum_Operation):
         high_w += [self.run_one_circ(first_subcirc_i+1).values()[0][0]]
         #print 'high_w1 =', high_w[0]
 
+        # (4) Measure low-weight operator second time
+        low_w += [self.run_one_circ(first_subcirc_i+2).values()[0][0]]
+        #print 'low_w2 =', low_w[1]
+
+        # (5) Measure high-weight operator second time
+        high_w += [self.run_one_circ(first_subcirc_i+3).values()[0][0]]
+        #print 'high_w2 =', high_w[1]
+
         #print 'State after high-w operator:'
         #print self.stabs
 
-        # (4) First QECX (FT) on target
-        QECX_supracirc = self.circuits[first_subcirc_i+2]
-        QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
-        QECX_targ = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
-        outputQECX_targ = QECX_targ.run_QECX_FT()
-        s_targ1, f_targ1, corr_targ, error_det_targ = outputQECX_targ
-        self.stabs, self.destabs = QECX_targ.stabs[:], QECX_targ.destabs[:]
+        # We only measure the X stabilizers if the operators' eigenvalues did 
+        # not change.
+        if (low_w[0]==low_w[1]) and (high_w[0]==high_w[1]):
+            
+            # (6) First QECX (FT) on target
+            QECX_supracirc = self.circuits[first_subcirc_i+4]
+            QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
+            QECX_targ = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
+            outputQECX_targ = QECX_targ.run_QECX_FT()
+            s_targ1, f_targ1, corr_targ, error_det_targ = outputQECX_targ
+            self.stabs, self.destabs = QECX_targ.stabs[:], QECX_targ.destabs[:]
        
-        # (5) First QECX (FT) on ancilla 
-        QECX_supracirc = self.circuits[first_subcirc_i+3]
-        QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
-        QECX_anc = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
-        outputQECX_anc = QECX_anc.run_QECX_FT()
-        s_anc1, f_anc1, corr_anc, error_det_anc = outputQECX_anc
-        self.stabs, self.destabs = QECX_anc.stabs[:], QECX_anc.destabs[:]
-        
-        clause_targ = (corr_targ=='normal' and error_det_targ)
-        clause_anc = (corr_anc=='normal' and error_det_anc)
-        if clause_targ or clause_anc:
-            output = [low_w, high_w, [s_targ1], [s_anc1]] 
-            output += [[f_targ1], [f_anc1], 'normal', 'normal', True]
-            return tuple(output)
+            # (7) First QECX (FT) on ancilla 
+            QECX_supracirc = self.circuits[first_subcirc_i+5]
+            QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
+            QECX_anc = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
+            outputQECX_anc = QECX_anc.run_QECX_FT()
+            s_anc1, f_anc1, corr_anc, error_det_anc = outputQECX_anc
+            self.stabs, self.destabs = QECX_anc.stabs[:], QECX_anc.destabs[:]
+       
+            if corr_targ=='normal' and corr_anc=='normal':
+                error_det_total = error_det_targ or error_det_anc
 
-        # (6) Measure low-weight operator second time
-        low_w += [self.run_one_circ(first_subcirc_i+4).values()[0][0]]
-        #print 'low_w2 =', low_w[1]
-        
-        # (7) Measure high-weight operator second time
-        high_w += [self.run_one_circ(first_subcirc_i+5).values()[0][0]]
-        #print 'high_w2 =', high_w[1]
-            
-        error_det_total = error_det_targ or error_det_anc
-
-        # if the total parity stayed the same    
-        if low_w[0]*high_w[0] == low_w[1]*high_w[1]:
-        
-            # if both operators changed parities, error was after
-            #if low_w[0] != low_w[1]:
-            #    corr_targ, corr_anc = 'normal', 'normal'
-                
-            # if the location of the error is unknown, we measure the
-            # 2 boundary stabilizers again nonFT  (target)
-            if corr_targ == 'unknown':
-                QECX_supracirc = self.circuits[first_subcirc_i+6]
-                QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
-                QECX_targ = QEC_with_flags([self.stabs, self.destabs],
-                                           QECX_circs, self.chp_loc)
-                corr_targ = QECX_targ.run_QECX_nonFT(s_targ1)
-                self.stabs, self.destabs = QECX_anc.stabs[:], QECX_anc.destabs[:]
-                corr_anc = 'normal'
- 
-            # if the location of the error is unknown, we measure the
-            # 2 boundary stabilizers again nonFT  (ancilla)
-            elif corr_anc == 'unknown':
-                QECX_supracirc = self.circuits[first_subcirc_i+7]
-                QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
-                QECX_anc = QEC_with_flags([self.stabs, self.destabs],
-                                           QECX_circs, self.chp_loc)
-                corr_anc = QECX_anc.run_QECX_nonFT(s_anc1)
-                self.stabs, self.destabs = QECX_anc.stabs[:], QECX_anc.destabs[:]
-                corr_targ = 'normal'     
-            
-            # I could join the first and fourth options.
             else:
-                corr_targ, corr_anc = 'normal', 'normal'
+                error_det_total = True
+                    
+                clause_targ = (s_targ1[1]==0 and targ1[2]==1)
+                clause_anc = (s_anc1[1]==0 and s_anc1[2]==1)
                 
-            output = [low_w, high_w, [s_targ1], [s_anc1]] 
-            output += [[f_targ1], [f_anc1], corr_targ, corr_anc, error_det_total]
-            return tuple(output)
-
-
-        # if the parities changed
+                # if the error happened on one of the qubits involved in X2, then
+                # only re-measure X2.
+                if clause_targ or clause_anc:
+                    # (8) Measure low-weight operator third time
+                    low_w += [self.run_one_circ(first_subcirc_i+6).values()[0][0]]
+                    if low_w[2]!=low_w[1]:
+                        corr_targ, corr_anc = 'normal', 'normal'
+                        
+                    else:
+                        if corr_targ=='unknown':  corr_targ = 'alternative'
+                        if corr_anc=='unknown':  corr_anc = 'alternative'
+                    
+                # else re-measure only X4
+                else:
+                    # (9) Measure high-weight operator third time
+                    high_w += [self.run_one_circ(first_subcirc_i+7).values()[0][0]]
+                    if high_w[2]!=high_w[1]:
+                        corr_targ, corr_anc = 'normal', 'normal'
+                        
+                    else:
+                        if corr_targ=='unknown':  corr_targ = 'alternative'
+                        if corr_anc=='unknown':  corr_anc = 'alternative'
+                
+        # If the parities of the boundary operators changed
         else:
-            
-            # if the outcomes of the w-2 operators were different
-            if low_w[0] != low_w[1]:
-                low_w += [self.run_one_circ(first_subcirc_i+8).values()[0][0]]
-            
-            # if the outcomes of the w-4 operators were different
-            else:
-                high_w += [self.run_one_circ(first_subcirc_i+9).values()[0][0]]
-                
-            output = [low_w, high_w, [s_targ1], [s_anc1]] 
-            output += [[f_targ1], [f_anc1], 'normal', 'normal', error_det_total]
-            return tuple(output)
+            error_det_total = True
 
+            if low_w[0]!=low_w[1]:
+                # (8) Measure low-weight operator third time
+                low_w += [self.run_one_circ(first_subcirc_i+6).values()[0][0]]
+            if high_w[0]!=high_w[1]:
+                # (9) Measure low-weight operator third time
+                high_w += [self.run_one_circ(first_subcirc_i+7).values()[0][0]]
+            
+            corr_targ, corr_anc = 'normal', 'normal'
+        
+        output = [low_w, high_w, [s_targ1], [s_anc1]] 
+        output += [[f_targ1], [f_anc1], corr_targ, corr_anc, error_det_total]
+        return tuple(output)
+            
 
 
 class QEC_d3(Quantum_Operation):
