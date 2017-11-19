@@ -387,8 +387,10 @@ class Measure_2_logicals(Quantum_Operation):
           
 
 
-    def run_XX_flags(self):
+    def run_boundary_oper_flags(self, error_det=False):
         '''
+        runs the circuit to measure the XX or ZZ between two logical qubits in
+        a FT fashion.
         '''    
         
         #tricky_indices = [4,5,6]  # using Alejandro's indexing
@@ -410,6 +412,14 @@ class Measure_2_logicals(Quantum_Operation):
         # (3) Measure high-weight operator first time
         high_w += [self.run_one_circ(first_subcirc_i+1).values()[0][0]]
         print 'high_w1 =', high_w[0]
+       
+        # If an error has already been detected in a previous step of
+        # the supra-circuit, we only need to measure the two operators
+        # once.
+        if error_det:
+            output = [low_w, high_w, [0,0,0], [0,0,0]] 
+            output += [[0,0,0], [0,0,0], 'normal', 'normal', True]
+            return tuple(output)
 
         # (4) Measure low-weight operator second time
         low_w += [self.run_one_circ(first_subcirc_i+2).values()[0][0]]
@@ -426,21 +436,21 @@ class Measure_2_logicals(Quantum_Operation):
         # not change.
         if (low_w[0]==low_w[1]) and (high_w[0]==high_w[1]):
             
-            # (6) First QECX (FT) on target
-            QECX_supracirc = self.circuits[first_subcirc_i+4]
-            QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
-            QECX_targ = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
-            outputQECX_targ = QECX_targ.run_QECX_FT()
-            s_targ1, f_targ1, corr_targ, error_det_targ = outputQECX_targ
-            self.stabs, self.destabs = QECX_targ.stabs[:], QECX_targ.destabs[:]
+            # (6) First QEC (FT) on target (if X) or control (if Z)
+            QEC_supracirc = self.circuits[first_subcirc_i+4]
+            QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+            QEC_nonanc = QEC_with_flags([self.stabs, self.destabs], QEC_circs, self.chp_loc)
+            outputQEC_nonanc = QEC_nonanc.run_QEC_FT_lattsurg()
+            s_targ1, f_targ1, corr_targ, error_det_targ = outputQECX_nonanc
+            self.stabs, self.destabs = QEC_nonanc.stabs[:], QEC_nonanc.destabs[:]
        
-            # (7) First QECX (FT) on ancilla 
-            QECX_supracirc = self.circuits[first_subcirc_i+5]
-            QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
-            QECX_anc = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
-            outputQECX_anc = QECX_anc.run_QECX_FT()
-            s_anc1, f_anc1, corr_anc, error_det_anc = outputQECX_anc
-            self.stabs, self.destabs = QECX_anc.stabs[:], QECX_anc.destabs[:]
+            # (7) First QEC (FT) on ancilla 
+            QEC_supracirc = self.circuits[first_subcirc_i+5]
+            QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+            QEC_anc = QEC_with_flags([self.stabs, self.destabs], QEC_circs, self.chp_loc)
+            outputQEC_anc = QEC_anc.run_QEC_FT_lattsurg()
+            s_anc1, f_anc1, corr_anc, error_det_anc = outputQEC_anc
+            self.stabs, self.destabs = QEC_anc.stabs[:], QEC_anc.destabs[:]
        
             if corr_targ=='normal' and corr_anc=='normal':
                 error_det_total = error_det_targ or error_det_anc
@@ -450,15 +460,18 @@ class Measure_2_logicals(Quantum_Operation):
                     
                 clause_targ = (s_targ1[1]==0 and s_targ1[2]==1)
                 clause_anc = (s_anc1[1]==0 and s_anc1[2]==1)
-                
+                clause_flag = (sum(f_targ1)==0 and sum(f_anc1)==0)
+
                 # if the error happened on one of the qubits involved in X2, then
                 # only re-measure X2.
-                if clause_targ or clause_anc:
+                if (clause_targ or clause_anc) and clause_flag:
                     # (8) Measure low-weight operator third time
                     low_w += [self.run_one_circ(first_subcirc_i+6).values()[0][0]]
                     if low_w[2]!=low_w[1]:
                         corr_targ, corr_anc = 'normal', 'normal'
-                        
+                        # the correct eigenvalue of low_w was the first one.
+                        low_w[2] = low_w[0]
+
                     else:
                         if corr_targ=='unknown':  corr_targ = 'alternative'
                         if corr_anc=='unknown':  corr_anc = 'alternative'
@@ -469,6 +482,8 @@ class Measure_2_logicals(Quantum_Operation):
                     high_w += [self.run_one_circ(first_subcirc_i+7).values()[0][0]]
                     if high_w[2]!=high_w[1]:
                         corr_targ, corr_anc = 'normal', 'normal'
+                        # the correct eigenvalue of low_w was the first one.
+                        high_w[2] = high_w[0]
                         
                     else:
                         if corr_targ=='unknown':  corr_targ = 'alternative'
@@ -488,25 +503,29 @@ class Measure_2_logicals(Quantum_Operation):
             # a measurement error and a data error.  We measure the last stabilizer 
             # of both logical qubits nonFT
             if low_w[1]==low_w[2]:
-                # QECX on target
-                QECX_supracirc = self.circuits[first_subcirc_i+4]
-                QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
-                QECX_targ = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
-                outputQECX_targ = QECX_targ.run_QECX_FT(stab=2)
-                s_targ1, f_targ1, corr_targ, error_det_targ = outputQECX_targ
-                self.stabs, self.destabs = QECX_targ.stabs[:], QECX_targ.destabs[:]
+                # QEC on target or control
+                QEC_supracirc = self.circuits[first_subcirc_i+4]
+                QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+                QEC_targ = QEC_with_flags([self.stabs, self.destabs], QEC_circs, self.chp_loc)
+                outputQEC_targ = QEC_targ.run_QEC_FT_lattsurg(stab=2)
+                s_targ1, f_targ1, corr_targ, error_det_targ = outputQEC_targ
+                self.stabs, self.destabs = QEC_targ.stabs[:], QEC_targ.destabs[:]
        
-                # QECX on ancilla 
-                QECX_supracirc = self.circuits[first_subcirc_i+5]
-                QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
-                QECX_anc = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
-                outputQECX_anc = QECX_anc.run_QECX_FT(stab=2)
-                s_anc1, f_anc1, corr_anc, error_det_anc = outputQECX_anc
-                self.stabs, self.destabs = QECX_anc.stabs[:], QECX_anc.destabs[:]
+                # QEC on ancilla 
+                QEC_supracirc = self.circuits[first_subcirc_i+5]
+                QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+                QEC_anc = QEC_with_flags([self.stabs, self.destabs], QEC_circs, self.chp_loc)
+                outputQEC_anc = QEC_anc.run_QEC_FT_lattsurg(stab=2)
+                s_anc1, f_anc1, corr_anc, error_det_anc = outputQEC_anc
+                self.stabs, self.destabs = QEC_anc.stabs[:], QEC_anc.destabs[:]
 
                 # if an error was detected, then trust the first X2 value
                 if s_targ1[2]==1 or s_anc1[2]==1:
                     low_w[2] = low_w[0]
+
+            else:
+                s_targ1, f_targ1 = [0,0,0], [0,0,0]
+                s_anc1, f_anc1 = [0,0,0], [0,0,0]
 
 
         # If only X4 changed, then only re-measure X4.
@@ -519,26 +538,30 @@ class Measure_2_logicals(Quantum_Operation):
             # a measurement error and a data error.  We measure the last stabilizer 
             # of both logical qubits nonFT
             if high_w[1]==high_w[2]:
-                # QECX on target
-                QECX_supracirc = self.circuits[first_subcirc_i+4]
-                QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
-                QECX_targ = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
-                outputQECX_targ = QECX_targ.run_QECX_FT(stab=1)
-                s_targ1, f_targ1, corr_targ, error_det_targ = outputQECX_targ
-                self.stabs, self.destabs = QECX_targ.stabs[:], QECX_targ.destabs[:]
+                # QEC on target or control
+                QEC_supracirc = self.circuits[first_subcirc_i+4]
+                QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+                QEC_targ = QEC_with_flags([self.stabs, self.destabs], 
+                                           QEC_circs, self.chp_loc)
+                outputQEC_targ = QEC_targ.run_QEC_FT_lattsurg(stab=1)
+                s_targ1, f_targ1, corr_targ, error_det_targ = outputQEC_targ
+                self.stabs, self.destabs = QEC_targ.stabs[:], QEC_targ.destabs[:]
        
-                # QECX on ancilla 
-                QECX_supracirc = self.circuits[first_subcirc_i+5]
-                QECX_circs = [gate.circuit_list[0] for gate in QECX_supracirc.gates]
-                QECX_anc = QEC_with_flags([self.stabs, self.destabs], QECX_circs, self.chp_loc)
-                outputQECX_anc = QECX_anc.run_QECX_FT(stab=1)
-                s_anc1, f_anc1, corr_anc, error_det_anc = outputQECX_anc
-                self.stabs, self.destabs = QECX_anc.stabs[:], QECX_anc.destabs[:]
+                # QEC on ancilla 
+                QEC_supracirc = self.circuits[first_subcirc_i+5]
+                QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+                QEC_anc = QEC_with_flags([self.stabs, self.destabs], QEC_circs, self.chp_loc)
+                outputQEC_anc = QEC_anc.run_QEC_FT_lattsurg(stab=1)
+                s_anc1, f_anc1, corr_anc, error_det_anc = outputQEC_anc
+                self.stabs, self.destabs = QEC_anc.stabs[:], QEC_anc.destabs[:]
 
                 # if an error was detected, then trust the first X2 value
                 if s_targ1[1]==1 or s_anc1[1]==1:
                     high_w[2] = high_w[0]
             
+            else:
+                s_targ1, f_targ1 = [0,0,0], [0,0,0]
+                s_anc1, f_anc1 = [0,0,0], [0,0,0]
 
         # if both X2 and X4 changed, then this was caused by a w-2 error.
         # We don't do anything else.
@@ -2044,7 +2067,7 @@ class QEC_with_flags(Quantum_Operation):
             
     
     
-    def run_QECX_FT(self, stab='all'):
+    def run_QEC_FT_lattsurg(self, stab='all'):
         '''
         output:  syndrome, flags, type of correction, error detected
         if stab=='all', we measure all the stabilizers the usual way
@@ -2057,11 +2080,11 @@ class QEC_with_flags(Quantum_Operation):
 
         
         if stab==2:
-            syn3 = self.run_one_circ(4).values()[0][0]
+            syn3 = self.run_one_circ(5).values()[0][0]
             return [0,0,syn3], [0,0,0], corr_type, error_det
             
         elif stab==1:
-            syn2 = self.run_one_circ(3).values()[0][0]
+            syn2 = self.run_one_circ(4).values()[0][0]
             return [0,syn2,0], [0,0,0], corr_type, error_det
 
 
@@ -2083,23 +2106,33 @@ class QEC_with_flags(Quantum_Operation):
                 total_syn, total_flag = [syn1,syn2,0], [flag1,flag2,0]
             
             else:
-
-                # if an error was detected, measure the second stab nonFT to
-                # distinguish between meas. and data errors
+                # if an error was detected, measure the first stab nonFT to
+                # make distinguish between (1) an error that happened on one of
+                # qubits of the first and second stabs after the first stab was
+                # measured and (2) an error that happened on one of the qubits
+                # of the second stab not shared with the first stab.
                 if syn2==1:
-                    syn2 = self.run_one_circ(3).values()[0][0]
-                    
-                    # if the syndrome is 0 this time, that means it was a
-                    # measurement error and we're done.
-                    if syn2==0:
+                
+                    syn1 = self.run_one_circ(3).values()[0][0]
+                    # if syn1 is 1, then it was the first option and we're done
+                    if syn1==1:
                         total_syn, total_flag = [syn1,syn2,0], [flag1,flag2,0]
-
-                    # if the syndrome was 1 the second time, it was a data error
-                    # and we need to measure the third stabilizer nonFT.
+                    
+                    # else: measure the second stab again, this time nonFT
                     else:
-                        syn3 = self.run_one_circ(4).values()[0][0]
-                        total_syn, total_flag = [syn1,syn2,syn3], [flag1,flag2,0]
-                        corr_type = 'unknown'
+                        syn2 = self.run_one_circ(4).values()[0][0]
+                    
+                        # if the syndrome is 0 this time, that means it was a
+                        # measurement error and we're done.
+                        if syn2==0:
+                            total_syn, total_flag = [syn1,syn2,0], [flag1,flag2,0]
+
+                        # if the syndrome was 1 the second time, it was a data error
+                        # and we need to measure the third stabilizer nonFT.
+                        else:
+                            syn3 = self.run_one_circ(4).values()[0][0]
+                            total_syn, total_flag = [syn1,syn2,syn3], [flag1,flag2,0]
+                            corr_type = 'unknown'
 
                 # if no error was detected, measure the third stabilizer FT
                 else:
@@ -2111,12 +2144,31 @@ class QEC_with_flags(Quantum_Operation):
                     if flag3==0:
                         
                         # if the flag is 0, but the third syndrome is 1, we need
-                        # to measure the third stabilizer again
+                        # to measure the stabilizers again
                         if syn3==1:
-                            syn3 = self.run_one_circ(4).values()[0][0]
-                            # if the syndrome is 1 again, it was a data error
-                            if syn3==1: 
-                                corr_type = 'unknown'
+                            syn1 = self.run_one_circ(3).values()[0][0]
+                            
+                            # if syn1 is 1, the error was on a non-boundary data qubit
+                            # after the first stabilizer
+                            if syn1==1:
+                                total_syn = [syn1,syn2,syn3]
+                                total_flag = [flag1,flag2,flag3]
+                            else:
+                                syn2 = self.run_one_circ(4).values()[0][0]
+                                # if syn2 is 1, the error was on a boundary qubit
+                                if syn2==1:
+                                    total_syn = [syn1,syn2,syn3]
+                                    total_flag = [flag1,flag2,flag3]
+                                    corr_type = 'unknown'
+                                else:
+                                    syn3 = self.run_one_circ(5).values()[0][0]
+                                    total_syn = [syn1,syn2,syn3]
+                                    total_flag = [flag1,flag2,flag3]
+                                    # if the syndrome is 1 again, it was a data error
+                                    if syn3==1:
+                                        corr_type = 'unknown'
+                                        
+
                         else:
                             error_det = False
 
@@ -2498,11 +2550,11 @@ class Supra_Circuit(object):
                 return parity, rep, corr_type, anc_corr
 
 
-        elif quant_gate.gate_name == 'MeasureXX_flags':
+        elif quant_gate.gate_name=='MeasureXX_flags' or quant_gate.gate_name=='MeasureZZ_flags':
 
             quant_circs = [g.circuit_list[0] for g in sub_circ.gates]
             q_oper = Measure_2_logicals(self.state[:], quant_circs, self.chp_loc)
-            output = q_oper.run_XX_flags()
+            output = q_oper.run_boundary_oper_flags(error_det)
             self.state = [q_oper.stabs[:], q_oper.destabs[:]]
             #print self.state[0] 
 

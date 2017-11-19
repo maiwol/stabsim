@@ -915,48 +915,46 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
 
         return CNOT_circ
 
-    # (2) Measure XX between target and ancilla
-    #XX_qubits = [[[1,1], [2,1]], [[1,3], [1,5]]]
-    XX_qubits = [[[1,1], [2,1]], [[1,3], [2,3], [1,5], [2,5]]]
-    #XX_qubits = [[[1,3], [2,3], [1,5], [2,5]], [[1,1], [2,1]]]
-    #XX_qubits = [[[1,1], [1,3], [1,5], [2,1], [2,3], [2,5]]]
-    #measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X', True, True, True)
     
     if flag:
-        measureXX_circ = cor.Flag_Correct.measure_XXlogical()
+        measureXX_circ = cor.Flag_Correct.measure_logical_boundary('X')
         jointQEC_circ = cor.Flag_Correct.joint_QECZ([1,2])
-    
+        measureZZ_circ = cor.Flag_Correct.measure_logical_boundary('Z')
+
     else:
+        # (2) Measure XX between target and ancilla
+        #XX_qubits = [[[1,1], [2,1]], [[1,3], [1,5]]]
+        XX_qubits = [[[1,1], [2,1]], [[1,3], [2,3], [1,5], [2,5]]]
+        #XX_qubits = [[[1,3], [2,3], [1,5], [2,5]], [[1,1], [2,1]]]
+        #XX_qubits = [[[1,1], [1,3], [1,5], [2,1], [2,3], [2,5]]]
+        #measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X', True, True, True)
         measureXX_circ = create_measure_2_logicals(Is_after2q, XX_qubits, 'X', True, True, True)
         jointQEC_circ = create_joint_EC(Is_after2q, 'Z', non_anc_qubit='targ')
     
-    CNOT_circ.join_circuit_at(range(n_code, 3*n_code), measureXX_circ)
+        #I_circuit = create_I_circuit(3*n_code)
+        #CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
+        # (2.1) Do QEC on ancillary logical qubit
+        #QEC_anc = create_EC_subcircs(code, Is_after2q, False)
+        #CNOT_circ.join_circuit_at(range(2*n_code,3*n_code), QEC_anc)
+        # (3) Perform joint QEC on target and ancilla 
+        # (only if XX and XXXX were measured) 
+        #jointQEC_circ = create_joint_EC(Is_after2q, 'Z', non_anc_qubit='targ')
+        #CNOT_circ.join_circuit_at(range(n_code, 3*n_code), jointQEC_circ)
     
+        #I_circuit = create_I_circuit(3*n_code)
+        #CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
+    
+        # (3) Measure ZZ between control and ancilla 
+        #ZZ_qubits = [[[0,0], [0,4]], [[0,3], [2,3]]]
+        ZZ_qubits = [[[0,0], [2,0], [0,4], [2,4]], [[0,3], [2,3]]]
+        #ZZ_qubits = [[[0,0], [0,3], [0,4], [2,0], [2,3], [2,4]]]
+        measureZZ_circ = create_measure_2_logicals(Is_after2q, ZZ_qubits, 'Z')
+    
+    CNOT_circ.join_circuit_at(range(n_code, 3*n_code), measureXX_circ)   
     # (3) Perform joint QEC on target and ancilla 
     # (only if XX and XXXX were measured) 
     #jointQEC_circ = create_joint_EC(Is_after2q, 'Z', non_anc_qubit='targ')
     CNOT_circ.join_circuit_at(range(n_code, 3*n_code), jointQEC_circ)
-
-    #I_circuit = create_I_circuit(3*n_code)
-    #CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
-    
-    # (2.1) Do QEC on ancillary logical qubit
-    #QEC_anc = create_EC_subcircs(code, Is_after2q, False)
-    #CNOT_circ.join_circuit_at(range(2*n_code,3*n_code), QEC_anc)
-   
-    # (3) Perform joint QEC on target and ancilla 
-    # (only if XX and XXXX were measured) 
-    #jointQEC_circ = create_joint_EC(Is_after2q, 'Z', non_anc_qubit='targ')
-    #CNOT_circ.join_circuit_at(range(n_code, 3*n_code), jointQEC_circ)
-    
-    #I_circuit = create_I_circuit(3*n_code)
-    #CNOT_circ.join_circuit_at(range(3*n_code), I_circuit)
-    
-    # (3) Measure ZZ between control and ancilla 
-    #ZZ_qubits = [[[0,0], [0,4]], [[0,3], [2,3]]]
-    ZZ_qubits = [[[0,0], [2,0], [0,4], [2,4]], [[0,3], [2,3]]]
-    #ZZ_qubits = [[[0,0], [0,3], [0,4], [2,0], [2,3], [2,4]]]
-    measureZZ_circ = create_measure_2_logicals(Is_after2q, ZZ_qubits, 'Z')
     CNOT_circ.join_circuit(measureZZ_circ, anc_parallel)
 
     #I_circuit = create_I_circuit(3*n_code)
