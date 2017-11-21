@@ -856,17 +856,26 @@ class Flag_Correct:
 
 
     @classmethod
-    def QECZ_total(cls, log_qubit=0):
+    def QEC_split_qubits(cls, Pauli_type='X', log_qubit=0, last_round=True):
         '''
-        One round of stabilizer with flags + one round without flags
-        Standard order of stabilizers
-        Used for lattice surgery
+        Measurement of stabilizers on a given logical qubit to perform
+        splitting after merging during lattice surgery.
+        We do one round of 3 stabilizers with flags + one round 
+        without flags (+ one round of the other Pauli type to 
+        catch possible w-2 hook errors)
         log_qubit: 0 (ctrl); 1 (targ); 2 (anc)
         '''
         
         n_code = 7
         n_total = 7*3
         stabs = [[3,4,5,6], [1,2,5,6], [0,2,4,6]]
+
+        if Pauli_type == 'X':
+            ent_gate = 'CX'
+            other_gate = 'CZ'
+        elif Pauli_type == 'Z':
+            ent_gate = 'CZ'
+            other_gate = 'CX'
 
         QEC_circ = Circuit()
         for i_stab in range(len(stabs)):
@@ -876,7 +885,7 @@ class Flag_Correct:
             for i in range(len(stabs[i_stab])):
                 q_index = stabs[i_stab][i]
                 data_index = log_qubit*n_code + q_index
-                stab_circ.add_gate_at([n_total, data_index], 'CZ')
+                stab_circ.add_gate_at([n_total, data_index], ent_gate)
                 if i==0 or i==2:
                     stab_circ.add_gate_at([n_total, n_total+1], 'CX')
             stab_circ.add_gate_at([n_total], 'ImX')
@@ -893,7 +902,7 @@ class Flag_Correct:
             stab_circ.add_gate_at([n_total], 'PrepareXPlus')
             for q_index in stabs[i_stab]:
                 data_index = log_qubit*n_code + q_index
-                stab_circ.add_gate_at([n_total, data_index], 'CZ')
+                stab_circ.add_gate_at([n_total, data_index], ent_gate)
             stab_circ.add_gate_at([n_total], 'ImX')
             stab_circ.add_gate_at([n_total], 'MeasureX')
             
@@ -901,20 +910,43 @@ class Flag_Correct:
             stab_circ = Encoded_Gate('Stab_nonFT%i'%i_stab, [stab_circ]).circuit_wrap()
             QEC_circ.join_circuit(stab_circ)
 
-        QEC_circ = Encoded_Gate('ECZ_total', [QEC_circ]).circuit_wrap()
+        # One round of the other stabilizers.  These are only run if a flag was triggered 
+        # during the measurement of the first stabilizers
+        if last_round:
+            for i_stab in range(len(stabs)):
+                stab_circ = Circuit()
+                stab_circ.add_gate_at([n_total], 'PrepareXPlus')
+                for q_index in stabs[i_stab]:
+                    data_index = log_qubit*n_code + q_index
+                    stab_circ.add_gate_at([n_total, data_index], other_gate)
+                stab_circ.add_gate_at([n_total], 'ImX')
+                stab_circ.add_gate_at([n_total], 'MeasureX')
+            
+                stab_circ.to_ancilla([n_total])
+                stab_circ = Encoded_Gate('Stab_nonFT%i'%i_stab, [stab_circ]).circuit_wrap()
+                QEC_circ.join_circuit(stab_circ)
+        
+
+        QEC_circ = Encoded_Gate('EC%s_total'%Pauli_type, [QEC_circ]).circuit_wrap()
        
         return QEC_circ
 
 
 
     @classmethod
-    def joint_QECZ(cls, log_qubits=[0,1]):
+    def joint_QEC_split_qubits(cls, Pauli_type='X', log_qubits=[0,1]):
         '''
         '''
-        QEC_circ = Flag_Correct.QECZ_total(log_qubits[0])
-        QEC_circ2 = Flag_Correct.QECZ_total(log_qubits[1])
+        QEC_circ = Flag_Correct.QEC_split_qubits(Pauli_type, log_qubits[0])        
+        # When we measure the X stabilizers after the second merging, we don't
+        # need to worry about w-2 hook X errors on the ancilla logical qubit
+        # because we will measure it in the X basis.
+        last_round = True
+        if Pauli_type == 'X':
+            last_round = False
+        QEC_circ2 = Flag_Correct.QEC_split_qubits(Pauli_type, log_qubits[1], last_round)
         QEC_circ.join_circuit(QEC_circ2)
-        QEC_circ = Encoded_Gate('JointQECZ_flags', [QEC_circ]).circuit_wrap()
+        QEC_circ = Encoded_Gate('JointQEC%s_flags'%Pauli_type, [QEC_circ]).circuit_wrap()
 
         return QEC_circ
 
@@ -932,7 +964,7 @@ class Flag_Correct:
 
         # we always measure the non-boundary stabilizer first
         if Pauli_type == 'Z':
-            stabs = [[1,2,5,6], [0,2,4,6], 3,4,5,6]]
+            stabs = [[1,2,5,6], [0,2,4,6], [3,4,5,6]]
 
         elif Pauli_type == 'X':
             #stabs = [[0,1,2,3], [1,2,4,5], [2,6,5,3]]   # Alejandro
@@ -966,7 +998,7 @@ class Flag_Correct:
             stab_circ.add_gate_at([n_total], 'PrepareXPlus')
             for q_index in stabs[i_stab]:
                 data_index = log_qubit*n_code + q_index
-                stab_circ.add_gate_at([n_total, data_index], 'C'%Pauli_type)
+                stab_circ.add_gate_at([n_total, data_index], 'C%s'%Pauli_type)
             stab_circ.add_gate_at([n_total], 'ImX')
             stab_circ.add_gate_at([n_total], 'MeasureX')
             
@@ -1010,11 +1042,10 @@ class Flag_Correct:
         return QEC_circ
 
 
-    '''
+    
     @classmethod
     def measure_XXlogical(QEC_before=False):
-        '''
-        '''
+        
 
         n_code = 7
         n_total = 7*3
@@ -1112,11 +1143,11 @@ class Flag_Correct:
         XX_circ = Encoded_Gate('MeasureXX_flags', [XX_circ]).circuit_wrap()
 
         return XX_circ
-    '''
+    
     
     
     @classmethod
-    def measure_logical_boundary(Pauli_type='X', QEC_before=False):
+    def measure_logical_boundary(cls, Pauli_meas='X', QEC_before=False):
         '''
         Circuit to FTly measure a logical XX or ZZ on the boundary of two
         logical qubits encoded on the d-3 color code.
@@ -1129,13 +1160,13 @@ class Flag_Correct:
         if QEC_before:
             pass
         
-        if Pauli_type == 'Z':
+        if Pauli_meas == 'Z':
             w2_qubits = [[0,3],[2,3]]
             w4_qubits = [[0,0], [2,0], [0,4], [2,4]]
             ent_gate = 'CZ'
             nonanc_qubit = 0
 
-        elif Pauli_type == 'X':
+        elif Pauli_meas == 'X':
             #qubits = [[1,6], [2,6]]   # Alejandro
             w2_qubits = [[1,1], [2,1]]   # Mauricio
             #qubits = [[1,4], [2,4], [1,5], [2,5]]   # Alejandro
@@ -1151,7 +1182,7 @@ class Flag_Correct:
         w2_circ.add_gate_at([n_total], 'ImX')
         w2_circ.add_gate_at([n_total], 'MeasureX')
         w2_circ.to_ancilla([n_total])  
-        w2_circ = Encoded_Gate('%s2'%Pauli_type, [w2_circ]).circuit_wrap()
+        w2_circ = Encoded_Gate('%s2'%Pauli_meas, [w2_circ]).circuit_wrap()
         total_circ.join_circuit(w2_circ)
 
         # measure the w-4 operator
@@ -1162,7 +1193,7 @@ class Flag_Correct:
         w4_circ.add_gate_at([n_total], 'ImX')
         w4_circ.add_gate_at([n_total], 'MeasureX')
         w4_circ.to_ancilla([n_total])  
-        w4_circ = Encoded_Gate('w4', [w4_circ]).circuit_wrap()
+        w4_circ = Encoded_Gate('%s4'%Pauli_meas, [w4_circ]).circuit_wrap()
         total_circ.join_circuit(w4_circ)
         
         # measure the w-2 operator a second time
@@ -1173,7 +1204,7 @@ class Flag_Correct:
         w2_circ.add_gate_at([n_total], 'ImX')
         w2_circ.add_gate_at([n_total], 'MeasureX')
         w2_circ.to_ancilla([n_total])  
-        w2_circ = Encoded_Gate('%s2'%Pauli_type, [w2_circ]).circuit_wrap()
+        w2_circ = Encoded_Gate('%s2'%Pauli_meas, [w2_circ]).circuit_wrap()
         total_circ.join_circuit(w2_circ)
 
         # measure the w-4 operator a second time
@@ -1184,12 +1215,12 @@ class Flag_Correct:
         w4_circ.add_gate_at([n_total], 'ImX')
         w4_circ.add_gate_at([n_total], 'MeasureX')
         w4_circ.to_ancilla([n_total])  
-        w4_circ = Encoded_Gate('w4', [w4_circ]).circuit_wrap()
+        w4_circ = Encoded_Gate('%s4'%Pauli_meas, [w4_circ]).circuit_wrap()
         total_circ.join_circuit(w4_circ)
         
         # FT measurement of X stabs on target (1) and ancilla (2)
-        XX_circ.join_circuit(Flag_Correct.QEC_FT_lattsurg(Pauli_type, nonanc_qubit))
-        XX_circ.join_circuit(Flag_Correct.QEC_FT_lattsurg(Pauli_type, 2))
+        total_circ.join_circuit(Flag_Correct.QEC_FT_lattsurg(Pauli_meas, nonanc_qubit))
+        total_circ.join_circuit(Flag_Correct.QEC_FT_lattsurg(Pauli_meas, 2))
 
         # nonFT measurement of X stabs on target (1) and ancilla (2)
         #XX_circ.join_circuit(Flag_Correct.QECX_nonFT_lattsurg(1))
@@ -1203,7 +1234,7 @@ class Flag_Correct:
         w2_circ.add_gate_at([n_total], 'ImX')
         w2_circ.add_gate_at([n_total], 'MeasureX')
         w2_circ.to_ancilla([n_total])  
-        w2_circ = Encoded_Gate('%s2'%Pauli_type, [w2_circ]).circuit_wrap()
+        w2_circ = Encoded_Gate('%s2'%Pauli_meas, [w2_circ]).circuit_wrap()
         total_circ.join_circuit(w2_circ)
 
         # measure the w-4 operator a third time
@@ -1214,10 +1245,10 @@ class Flag_Correct:
         w4_circ.add_gate_at([n_total], 'ImX')
         w4_circ.add_gate_at([n_total], 'MeasureX')
         w4_circ.to_ancilla([n_total])  
-        w4_circ = Encoded_Gate('w4', [w4_circ]).circuit_wrap()
+        w4_circ = Encoded_Gate('%s4'%Pauli_meas, [w4_circ]).circuit_wrap()
         total_circ.join_circuit(w4_circ)
  
-        total_circ = Encoded_Gate('Measure%s%s_flags'%(Pauli_type,Pauli_type), 
+        total_circ = Encoded_Gate('Measure%s%s_flags'%(Pauli_meas,Pauli_meas), 
                                   [total_circ]).circuit_wrap()
 
         return total_circ
