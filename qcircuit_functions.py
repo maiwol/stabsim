@@ -632,6 +632,34 @@ def create_EC_subcircs(code, Is_after2q, initial_I=True,
 
 
 
+def add_idle_and_cross_gates(circ_object, n_idle, n_cross, qubit_list):
+    '''
+    Takes a circuit and adds 'n_idle' I_idle gate and 'n_cross'
+    I_cross gates to all qubits
+    '''
+
+    for q in qubit_list:
+        for i in range(n_idle):
+            circ_object.add_gate_at([q], 'I_idle')
+        for i in range(n_cross):
+            circ_object.add_gate_at([q], 'I_cross')
+
+    return None
+
+
+
+def add_MSgate_with_idle_gates(circ_object, n_idle, n_cross, MS_qubits, qubit_list):
+    '''
+    '''
+
+    add_idle_and_cross_gates(circ_object, n_idle, n_cross, qubit_list)
+    idle_MS_qubits = [q for q in qubit_list if q not in MS_qubits]    
+    add_idle_and_cross_gates(circ_object, 1, 0, idle_MS_qubits)
+    circ_object.add_gate_at(MS_qubits, 'MS')
+    
+    return None
+
+
 
 def create_measure_2_logicals_ion(logicals='X', meas_errors=True,
                                   FT_meas=True, QEC_before=False):
@@ -639,7 +667,7 @@ def create_measure_2_logicals_ion(logicals='X', meas_errors=True,
     '''
 
     n_code = 7
-    measure_circ = c.Circuit()
+    total_circ = c.Circuit()
 
     if QEC_before:
         pass
@@ -649,13 +677,222 @@ def create_measure_2_logicals_ion(logicals='X', meas_errors=True,
         if logicals == 'X':
             
             # This means we will measure X_t X_a
-            # 1.  Measure X7_t X7_a.  In our convention 7 -> 1.
-            qubit_pairs = [[1,1], [2,1]]
+            w2_qubits = [[1,1], [2,1]]   # Mauricio's convention
+            #qubit_pairs = [[1,6], [2,6]]   # Alejandro's convention
+            w4_qubits = [[1,3], [1,5], [2,3], [2,5]]   # Mauricio
+            #qubits = [[1,4], [1,5], [2,4], [2,5]]   # Alejandro
+
+            ################################################
+            # measure the w-2 operator first time: C2-X2
+
+            idle_times = [4,6,3,4,2,1]
+            cross_times = [0,0,1,0,0,0]
+            w2_qs = [n_code*w2_qubits[0][0] + w2_qubits[0][1],
+                     n_code*w2_qubits[1][0] + w2_qubits[1][1]]
+            w2_circ = c.Circuit()
+            w2_circ.add_gate_at([3*n_code], 'PrepareZPlus')
+            
+            # time step 0
+            add_idle_and_cross_gates(w2_circ, idle_times[0],
+                                     cross_times[0], range(3*n_code+1))
+            w2_circ.add_gate_at([w2_qs[0]], 'RX -')
+
+            # time step 1
+            MS_qubits = [w2_qs[0], 3*n_code]
+            add_MSgate_with_idle_gates(w2_circ, idle_times[1], cross_times[1],
+                                       MS_qubits, range(3*n_code+1))
+
+            # time step 2
+            add_idle_and_cross_gates(w2_circ, idle_times[2],
+                                     cross_times[2], range(3*n_code+1))
+            w2_circ.add_gate_at([w2_qs[1]], 'RX -')
+
+            # time step 3
+            MS_qubits = [w2_qs[1], 3*n_code]
+            add_MSgate_with_idle_gates(w2_circ, idle_times[3], cross_times[3],
+                                       MS_qubits, range(3*n_code+1))
+
+            # time step 4
+            add_idle_and_cross_gates(w2_circ, idle_times[4],
+                                     cross_times[4], range(3*n_code+1))
+            
+            # time step 5 (really happens after measurement;
+            # that's why we don't include ancilla qubit
+            add_idle_and_cross_gates(w2_circ, idle_times[5],
+                                     cross_times[5], range(3*n_code))
+            
+            # I'm assuming the measurement is instantaneous.
+            w2_circ.add_gate_at([3*n_code], 'ImZ')
+            w2_circ.add_gate_at([3*n_code], 'MeasureZ')
+
+            # Generate encoded gate
+            w2_circ.to_ancilla([3*n_code])
+            w2_circ = c.Encoded_Gate('C2_X2', [w2_circ]).circuit_wrap()
+            total_circ.join_circuit(w2_circ)            
+
+            ################################################
+            
+            ################################################
+            # measure the w-2 operator second time: X2
+
+            idle_times = [0,4,4,9,2]
+            cross_times = [0,0,0,0,0]
+            w2_circ = c.Circuit()
+            w2_circ.add_gate_at([3*n_code], 'PrepareZPlus')
+            
+            # time step 0
+            w2_circ.add_gate_at([w2_qs[0]], 'RX -')
+
+            # time step 1
+            add_idle_and_cross_gates(w2_circ, idle_times[1],
+                                     cross_times[1], range(3*n_code))
+            w2_circ.add_gate_at([w2_qs[1]], 'RX -')
+
+            # time step 2
+            # this time the first MS is with the ancilla.
+            MS_qubits = [w2_qs[1], 3*n_code]
+            add_MSgate_with_idle_gates(w2_circ, idle_times[2], cross_times[2],
+                                       MS_qubits, range(3*n_code+1))
+
+            # time step 3
+            MS_qubits = [w2_qs[0], 3*n_code]
+            add_MSgate_with_idle_gates(w2_circ, idle_times[3], cross_times[3],
+                                       MS_qubits, range(3*n_code+1))
+
+            # time step 4
+            add_idle_and_cross_gates(w2_circ, idle_times[4],
+                                     cross_times[4], range(3*n_code+1))
+            
+            # I'm assuming the measurement is instantaneous.
+            w2_circ.add_gate_at([3*n_code], 'ImZ')
+            w2_circ.add_gate_at([3*n_code], 'MeasureZ')
+
+            # Generate encoded gate
+            w2_circ.to_ancilla([3*n_code])
+            w2_circ = c.Encoded_Gate('X2', [w2_circ]).circuit_wrap()
+            total_circ.join_circuit(w2_circ)            
 
             
+            ################################################
+            # return the a7 to the ancilla arm: C2t
 
+            c2t_circ = c.Circuit()
+            add_idle_and_cross_gates(c2t_circ, 12, 1, range(3*n_code))
+            
+            # Generate encoded gate
+            c2t_circ = c.Encoded_Gate('C2t', [c2t_circ]).circuit_wrap()
+            total_circ.join_circuit(c2t_circ)            
 
+            ################################################
+            # measure the w-2 operator third time
+            # and return a7 to the ancilla arm: X2-C2t
 
+            idle_times = [2,3,5,10,2]
+            cross_times = [0,0,0,0,1]
+            w2_circ = c.Circuit()
+            w2_circ.add_gate_at([3*n_code], 'PrepareZPlus')
+            
+            # time step 0
+            add_idle_and_cross_gates(w2_circ, idle_times[0],
+                                     cross_times[0], range(3*n_code+1))
+            w2_circ.add_gate_at([w2_qs[1]], 'RX -')
+
+            # time step 1
+            add_idle_and_cross_gates(w2_circ, idle_times[1],
+                                     cross_times[1], range(3*n_code+1))
+            w2_circ.add_gate_at([w2_qs[0]], 'RX -')
+            
+            # time step 2
+            MS_qubits = [w2_qs[0], 3*n_code]
+            add_MSgate_with_idle_gates(w2_circ, idle_times[2], cross_times[2],
+                                       MS_qubits, range(3*n_code+1))
+
+            # time step 3
+            MS_qubits = [w2_qs[1], 3*n_code]
+            add_MSgate_with_idle_gates(w2_circ, idle_times[3], cross_times[3],
+                                       MS_qubits, range(3*n_code+1))
+
+            # time step 4
+            add_idle_and_cross_gates(w2_circ, idle_times[4],
+                                     cross_times[4], range(3*n_code+1))
+
+            # I'm assuming the measurement is instantaneous.
+            w2_circ.add_gate_at([3*n_code], 'ImZ')
+            w2_circ.add_gate_at([3*n_code], 'MeasureZ')
+
+            # Generate encoded gate
+            w2_circ.to_ancilla([3*n_code])
+            w2_circ = c.Encoded_Gate('X2_C2t', [w2_circ]).circuit_wrap()
+            total_circ.join_circuit(w2_circ)            
+
+            ################################################
+            
+            
+            ################################################
+            # measure the w-4 operator first time and return
+            # after: C4-X4-C4t (assuming we're coming from C2t)
+
+            idle_times = [1,3,7,2,4,4,2,4,1,4]
+            cross_times = [0,0,0,1,0,1,1,0,1,0]
+            w4_qs = [n_code*w4_qubits[0][0] + w4_qubits[0][1],
+                     n_code*w4_qubits[1][0] + w4_qubits[1][1],
+                     n_code*w4_qubits[2][0] + w4_qubits[2][1],
+                     n_code*w4_qubits[3][0] + w4_qubits[3][1]]
+            w4_circ = c.Circuit()
+            w4_circ.add_gate_at([3*n_code], 'PrepareZPlus')
+            
+            # time step 0
+            add_idle_and_cross_gates(w4_circ, idle_times[0],
+                                     cross_times[0], range(3*n_code+1))
+            w4_circ.add_gate_at([w4_q[1]], 'RX -')
+
+            # time step 1
+            add_idle_and_cross_gates(w4_circ, idle_times[1],
+                                     cross_times[1], range(3*n_code+1))
+            w4_circ.add_gate_at([w4_qs[0]], 'RX -')
+            
+            # time step 2
+            MS_qubits = [w4_qs[1], 3*n_code]
+            add_idle_and_cross_gates(w4_circ, idle_times[2],
+                                     cross_times[2], range(3*n_code+1))
+            idle_MS_qubits = [q for q in range(3*n_code+1) if q not in MS_qubits]    
+            add_idle_and_cross_gates(w4_circ, 1, 0, idle_MS_qubits)
+            w4_circ.add_gate_at(MS_qubits, 'MS')
+
+            # time step 3
+            add_idle_and_cross_gates(w4_circ, idle_times[3],
+                                     cross_times[3], range(3*n_code+1))
+            w4_circ.add_gate_at([w4_qs[3]], 'RX -')
+
+            # time step 4
+            MS_qubits = [w4_qs[3], 3*n_code]
+            add_idle_and_cross_gates(w4_circ, idle_times[4],
+                                     cross_times[4], range(3*n_code+1))
+            idle_MS_qubits = [q for q in range(3*n_code+1) if q not in MS_qubits]    
+            add_idle_and_cross_gates(w4_circ, 1, 0, idle_MS_qubits)
+            w4_circ.add_gate_at(MS_qubits, 'MS')
+            
+            # time step 5
+            MS_qubits = [w4_qs[0], 3*n_code]
+            add_idle_and_cross_gates(w4_circ, idle_times[5],
+                                     cross_times[5], range(3*n_code+1))
+            idle_MS_qubits = [q for q in range(3*n_code+1) if q not in MS_qubits]    
+            add_idle_and_cross_gates(w4_circ, 1, 0, idle_MS_qubits)
+            w4_circ.add_gate_at(MS_qubits, 'MS')
+            
+            
+            
+            w2_circ.add_gate_at([3*n_code], 'Z')
+            w2_circ.add_gate_at([3*n_code], 'MeasureZ')
+
+            # Generate encoded gate
+            w2_circ.to_ancilla([3*n_code])
+            w2_circ = c.Encoded_Gate('X2', [w2_circ]).circuit_wrap()
+            total_circ.join_circuit(w2_circ)            
+
+            ################################################
+
+    return total_circ
 
 
 
