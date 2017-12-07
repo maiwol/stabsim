@@ -259,10 +259,9 @@ def add_error_alternative(circ, error_info, sampling='old', gate_indices=[]):
 				new_g.is_error = True
 			else:
 				error_gate = pick_error(error_ratio)
-				new_g = circ.insert_gate(g, [g.qubits[1]], '', error_gate[1], False)
-				new_g.is_error = True
-				new_g = circ.insert_gate(g, [g.qubits[0]], '', error_gate[0], False)
-				new_g.is_error = True
+				for q_index in range(len(g.qubits))[::-1]:
+					new_g = circ.insert_gate(g, [g.qubits[q_index]], '', error_gate[q_index], False)
+					new_g.is_error = True
 
 	return
 

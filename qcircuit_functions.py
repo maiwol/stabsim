@@ -169,7 +169,6 @@ def get_total_indexes_one_circ(subset, one_q_gates, two_q_gates,
 
     return total_indexes, total_errors
 
-    
 
 
 def change_operators(stab_list):
@@ -720,7 +719,9 @@ def nonFT_stab_ion(data_qubits, Pauli_type='X', n_total=21):
 
     stab_circ.add_gate_at(MS_qubits, 'IMS5')
     add_idle_and_cross_gates(stab_circ, 1, 0, range(n_total))
+    stab_circ.add_gate_at([n_total], 'ImX')
     stab_circ.add_gate_at([n_total], 'MeasureX')
+    stab_circ.to_ancilla([n_total])
 
     return stab_circ
 
@@ -736,7 +737,7 @@ def FT_stab_ion(data_qubits, Pauli_type='X', n_total=21):
         idle_times = [5,0,0,5,5,0,0,8,0,0,5,5,0,0,2,1]
         cross_times = [0 for i in range(16)]
         gates_names = ['RX -','RX -','MS','MS','RX -','RX -','MS',
-                       'RX -','RX -','MS','MS','RX-','RX -','MS',
+                       'RX -','RX -','MS','MS','RX -','RX -','MS',
                        '','']
         gates_qubits = [[data_qubits[0]], [n_total], [data_qubits[0],n_total],
                         [n_total,n_total+1], [data_qubits[1]], [n_total],
@@ -783,6 +784,152 @@ def FT_stab_ion(data_qubits, Pauli_type='X', n_total=21):
     stab_circ.to_ancilla([n_total,n_total+1])
 
     return stab_circ
+
+
+
+def QEC_split_qubits_ion(Pauli_type='X', log_qubit=0, last_round=True):
+    '''
+    Measurement of stabilizers on a given logical qubit to perform
+    splitting after merging during lattice surgery.
+    We do one round of 3 stabilizers with flags + one round 
+    without flags (+ one round of the other Pauli type to 
+    catch possible w-2 hook errors)
+    log_qubit: 0 (ctrl); 1 (targ); 2 (anc)
+    '''
+
+    n_code = 7
+    n_total = 7*3
+    stabs = [[3,4,5,6], [1,2,5,6], [0,2,4,6]]
+    
+    data_qubits_list = []
+    for stab in stabs:
+        data_qubits_list += [[(n_code*log_qubit + q) for q in stab]]
+
+    if Pauli_type == 'X':  other_type = 'Z'
+    elif Pauli_type == 'Z':  other_type = 'X'
+
+    total_circ = c.Circuit()
+    # First stabilizer FT
+    stab_circ = FT_stab_ion(data_qubits_list[0], Pauli_type)
+    stab_circ = c.Encoded_Gate('Stab_FT0', [stab_circ]).circuit_wrap()
+    total_circ.join_circuit(stab_circ)
+
+    # Second stabilizer FT
+    # First we reorder the qubits from stab 1 to stab 2
+    stab_circ = c.Circuit()
+    add_idle_and_cross_gates(stab_circ, 7, 0, range(n_total))
+    # Then we add the stabilizer        
+    stab_circ.join_circuit(FT_stab_ion(data_qubits_list[1], Pauli_type))
+    stab_circ = c.Encoded_Gate('Stab_FT1', [stab_circ]).circuit_wrap()
+    total_circ.join_circuit(stab_circ)            
+
+    # Third stabilizer FT
+    # First we reorder the qubits from stab 2 to stab 3
+    stab_circ = c.Circuit()
+    add_idle_and_cross_gates(stab_circ, 9, 0, range(n_total))
+    # Then we add the stabilizer        
+    stab_circ.join_circuit(FT_stab_ion(data_qubits_list[2], Pauli_type))
+    stab_circ = c.Encoded_Gate('Stab_FT2', [stab_circ]).circuit_wrap()
+    total_circ.join_circuit(stab_circ)            
+    
+    # Reorder from stab 2 to stab 1
+    reorder_circ = c.Circuit()
+    add_idle_and_cross_gates(reorder_circ, 7, 0, range(n_total))
+    reorder_circ = c.Encoded_Gate('Reorder_1_0', [reorder_circ]).circuit_wrap()
+    total_circ.join_circuit(reorder_circ)            
+    
+    # Reorder from stab 3 to stab 2
+    reorder_circ = c.Circuit()
+    add_idle_and_cross_gates(reorder_circ, 9, 0, range(n_total))
+    reorder_circ = c.Encoded_Gate('Reorder_2_1', [reorder_circ]).circuit_wrap()
+    total_circ.join_circuit(reorder_circ)            
+    
+    # First stabilizer nonFT
+    stab_circ = nonFT_stab_ion(data_qubits_list[0], Pauli_type)
+    stab_circ = c.Encoded_Gate('Stab_nonFT0', [stab_circ]).circuit_wrap()
+    total_circ.join_circuit(stab_circ)
+
+    # Second stabilizer nonFT
+    # First we reorder the qubits from stab 1 to stab 2
+    stab_circ = c.Circuit()
+    add_idle_and_cross_gates(stab_circ, 7, 0, range(n_total))
+    # Then we add the stabilizer        
+    stab_circ.join_circuit(nonFT_stab_ion(data_qubits_list[1], Pauli_type))
+    stab_circ = c.Encoded_Gate('Stab_nonFT1', [stab_circ]).circuit_wrap()
+    total_circ.join_circuit(stab_circ)            
+
+    # Third stabilizer nonFT
+    # First we reorder the qubits from stab 2 to stab 3
+    stab_circ = c.Circuit()
+    add_idle_and_cross_gates(stab_circ, 9, 0, range(n_total))
+    # Then we add the stabilizer        
+    stab_circ.join_circuit(nonFT_stab_ion(data_qubits_list[2], Pauli_type))
+    stab_circ = c.Encoded_Gate('Stab_nonFT2', [stab_circ]).circuit_wrap()
+    total_circ.join_circuit(stab_circ)            
+
+    # Reorder from stab 3 to stab 2
+    reorder_circ = c.Circuit()
+    add_idle_and_cross_gates(reorder_circ, 9, 0, range(n_total))
+    reorder_circ = c.Encoded_Gate('Reorder_2_1', [reorder_circ]).circuit_wrap()
+    total_circ.join_circuit(reorder_circ)            
+
+    if last_round:
+        # First stabilizer nonFT (other type)
+        stab_circ = nonFT_stab_ion(data_qubits_list[0], other_type)
+        stab_circ = c.Encoded_Gate('Stab_nonFT0', [stab_circ]).circuit_wrap()
+        total_circ.join_circuit(stab_circ)
+
+        # Second stabilizer nonFT (other type)
+        # First we reorder the qubits from stab 1 to stab 2
+        stab_circ = c.Circuit()
+        add_idle_and_cross_gates(stab_circ, 7, 0, range(n_total))
+        # Then we add the stabilizer        
+        stab_circ.join_circuit(nonFT_stab_ion(data_qubits_list[1], other_type))
+        stab_circ = c.Encoded_Gate('Stab_nonFT1', [stab_circ]).circuit_wrap()
+        total_circ.join_circuit(stab_circ)            
+
+        # Third stabilizer nonFT (other type)
+        # First we reorder the qubits from stab 2 to stab 3
+        stab_circ = c.Circuit()
+        add_idle_and_cross_gates(stab_circ, 9, 0, range(n_total))
+        # Then we add the stabilizer        
+        stab_circ.join_circuit(nonFT_stab_ion(data_qubits_list[2], other_type))
+        stab_circ = c.Encoded_Gate('Stab_nonFT2', [stab_circ]).circuit_wrap()
+        total_circ.join_circuit(stab_circ)            
+
+        # Reorder from stab 2 to stab 1
+        reorder_circ = c.Circuit()
+        add_idle_and_cross_gates(reorder_circ, 7, 0, range(n_total))
+        reorder_circ = c.Encoded_Gate('Reorder_1_0', [reorder_circ]).circuit_wrap()
+        total_circ.join_circuit(reorder_circ)            
+    
+        # Reorder from stab 3 to stab 1
+        reorder_circ = c.Circuit()
+        add_idle_and_cross_gates(reorder_circ, 10, 0, range(n_total))
+        reorder_circ = c.Encoded_Gate('Reorder_2_0', [reorder_circ]).circuit_wrap()
+        total_circ.join_circuit(reorder_circ)            
+    
+    total_circ = c.Encoded_Gate('EC%s_total'%Pauli_type, [total_circ]).circuit_wrap()
+    
+    return total_circ
+
+
+
+def joint_QEC_split_qubits(Pauli_type='X', log_qubits=[0,1]):
+    '''
+    '''
+    QEC_circ = QEC_split_qubits_ion(Pauli_type, log_qubits[0])
+    # When we measure the X stabilizers after the second merging, we don't
+    # need to worry about w-2 hook X errors on the ancilla logical qubit
+    # because we will measure it in the X basis.
+    last_round = True
+    if Pauli_type == 'X':
+        last_round = False
+    QEC_circ2 = QEC_split_qubits_ion(Pauli_type, log_qubits[1], last_round)
+    QEC_circ.join_circuit(QEC_circ2)
+    QEC_circ = c.Encoded_Gate('JointQEC%s_flags'%Pauli_type, [QEC_circ]).circuit_wrap()
+
+    return QEC_circ
 
 
 
@@ -1602,6 +1749,9 @@ def create_measure_2_logicals_ion(logicals='X', meas_errors=True,
 
             ################################################
 
+    total_circ = c.Encoded_Gate('Measure%s%s_flags'%(logicals,logicals),
+                                [total_circ]).circuit_wrap()
+
     return total_circ
 
 
@@ -1818,7 +1968,7 @@ def create_I_circuit(n_qubits):
 
 
 def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
-                          EC_ctrl_targ=False, FT=True, flag=False):
+                          EC_ctrl_targ=False, FT=True, flag=False, ion=False):
     '''
     creates the whole supra-circuit for the lattice-surgery CNOT
     exclusive for the Steane code (distance-3 color code)
@@ -1864,10 +2014,34 @@ def create_latt_surg_CNOT(Is_after2q, initial_I=True, anc_parallel=True,
 
     
     if flag:
-        measureXX_circ = cor.Flag_Correct.measure_logical_boundary('X')
-        jointQEC_circ1 = cor.Flag_Correct.joint_QEC_split_qubits('Z', [1,2])
-        measureZZ_circ = cor.Flag_Correct.measure_logical_boundary('Z')
-        jointQEC_circ2 = cor.Flag_Correct.joint_QEC_split_qubits('X', [0,2])
+        if ion:
+            measureXX_circ = create_measure_2_logicals_ion('X')
+            jointQEC_circ1 = joint_QEC_split_qubits('Z', [1,2])
+            measureZZ_circ = create_measure_2_logicals_ion('Z')
+            jointQEC_circ2 = joint_QEC_split_qubits('X', [0,2])
+            
+            #jointQEC_circ1 = cor.Flag_Correct.joint_QEC_split_qubits('Z', [1,2])
+            #measureZZ_circ = cor.Flag_Correct.measure_logical_boundary('Z')
+            #jointQEC_circ2 = cor.Flag_Correct.joint_QEC_split_qubits('X', [0,2])
+    
+            CNOT_circ.join_circuit(measureXX_circ, anc_parallel)   
+            CNOT_circ.join_circuit(jointQEC_circ1, anc_parallel)
+            #CNOT_circ.join_circuit_at(range(n_code, 3*n_code), jointQEC_circ1)
+            CNOT_circ.join_circuit(measureZZ_circ, anc_parallel)
+            CNOT_circ.join_circuit(jointQEC_circ2, anc_parallel)
+            #CNOT_circ.join_circuit_at(range(n_code)+range(2*n_code,3*n_code), jointQEC_circ2)
+    
+            meas_circ = steane.Generator.create_encoded_circuit('MeasureXDestroy')
+            meas_circ = c.Encoded_Gate('MeasureX', [meas_circ]).circuit_wrap()
+            CNOT_circ.join_circuit_at(range(2*n_code, 3*n_code), meas_circ)
+
+            return CNOT_circ
+
+        else:
+            measureXX_circ = cor.Flag_Correct.measure_logical_boundary('X')
+            jointQEC_circ1 = cor.Flag_Correct.joint_QEC_split_qubits('Z', [1,2])
+            measureZZ_circ = cor.Flag_Correct.measure_logical_boundary('Z')
+            jointQEC_circ2 = cor.Flag_Correct.joint_QEC_split_qubits('X', [0,2])
 
     else:
         # (2) Measure XX between target and ancilla
@@ -1940,12 +2114,16 @@ def add_specific_error_config_CNOT(CNOT_circ, errors_to_add, gates_indexes):
     '''
     '''
 
+    #print errors_to_add
+    #print gates_indexes
+    
     for i in range(len(errors_to_add)):
         error_event = errors_to_add[i]
         gate_index = gates_indexes[i]
 
         #print 'error event =', error_event
         #print 'gate index =', gate_index
+        #sys.exit(0)
 
         # Very non-elegant, but I'm in a hurry.  MGA: 10/30/17.
         if len(gate_index) == 2:

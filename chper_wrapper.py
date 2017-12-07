@@ -2714,7 +2714,7 @@ def dict_for_error_model(error_model, p_1q, p_2q, p_meas,
                          p_bath=0., heating_rate=0., 
                          Stark_rate=0., p_prep=0., 
                          p_sm=0., p_cool=0.,
-                         p_cross=0.):
+                         p_cross=0., p_5q=0.):
     '''
     p_prep:  the error rate associated with a qubit state prep.
              We assume it's a bit-flip channel for Z prep and
@@ -2728,6 +2728,7 @@ def dict_for_error_model(error_model, p_1q, p_2q, p_meas,
     p_cross: the error rate associated with the idle time during
              the crossing through the trap junction.  Likewise, we
              assume it's only phase damping.
+    p_5q:  the error rate of the 5-qubit MS gate
     '''
 
     error_dict = {}
@@ -2887,12 +2888,10 @@ def dict_for_error_model(error_model, p_1q, p_2q, p_meas,
             if fiveq_error == 'IIIII':
                 continue
             fiveq_ratio[fiveq_error] = 1
-        error_dict['IMS5'] = {'error_rate': 2*p_2q, 'error_ratio': fiveq_ratio} 
-            
-        faulty_group2 = ['IMS5', 'MS']
+
         
-        if error_model[-1] == '2':
-            # Second eQual error model
+        if error_model[-1] == '2' or error_model[-1] == '3':
+            # Second and thirdeQual error model
             
             # Errors after idle qubit and junction crossing.
             # We assume p_sm is the error rate associated with the idle qubits.
@@ -2912,8 +2911,18 @@ def dict_for_error_model(error_model, p_1q, p_2q, p_meas,
             for g in one_qubit_gates:
                 error_dict[g] = one_qubit_dict
             faulty_group5 = one_qubit_gates[:]
-            faulty_groups = [faulty_group1, faulty_group2, faulty_group3,
-                             faulty_group4, faulty_group5]            
+            
+            if error_model[-1] == '2':
+                error_dict['IMS5'] = {'error_rate': 2*p_2q, 'error_ratio': fiveq_ratio} 
+                faulty_group2 = ['IMS5', 'MS']
+                faulty_groups = [faulty_group1, faulty_group2, faulty_group3,
+                                 faulty_group4, faulty_group5]            
+            else:
+                error_dict['IMS5'] = {'error_rate': 2*p_5q, 'error_ratio': fiveq_ratio} 
+                faulty_group2 = ['MS']
+                faulty_group6 = ['IMS5']
+                faulty_groups = [faulty_group1, faulty_group2, faulty_group3,
+                                 faulty_group4, faulty_group5, faulty_group6]            
 
 
         else:
@@ -3152,6 +3161,76 @@ def add_errors_fast_sampler_ion(gate_indices, n_errors, subcircs, error_info,
 
 
 
+def add_errors_fast_sampler_ion_latt_surg(gate_indices, n_errors, latt_circs, error_info,
+                                          n_subcircs_first_round=12):
+    '''
+    gate_indices:  a list of lists, each one corresponding to the indices for 
+                   each particular kind of gate.
+
+    Right now the output variable carry_run is always True.
+
+    '''
+    sampling = 'Muyalon'
+    n_subcircs = len(latt_circs)
+
+    # shuffle each list of gate indices and select the faulty gates
+    total_selected_gates = []
+    subcirc_gates_indices = []
+    total_indices = []
+    for i in range(len(n_errors)):
+        rd.shuffle(gate_indices[i])  # shuffle one of the lists
+        selected_gates = gate_indices[i][:n_errors[i]]  # select faulty gates
+        sorted_selected_gates = sorted(selected_gates, key=lambda gate: gate[0])
+        #total_selected_gates += [sorted_selected_gates]
+        total_selected_gates += sorted_selected_gates
+        
+        # define a list with the subcirc indices for each faulty gate
+        # if this particular faulty gate has no errors, then we add
+        # 1 to the number of subcircs on the first round of QEC.
+        # This is done just to make it easier to determine if the circuit
+        # will be run at all.
+        #if n_errors[i] > 0:
+        #    subcirc_gates_indices += [[gate[0] for gate in sorted_selected_gates]]
+        #else:
+        #    subcirc_gates_indices += [[n_subcircs_first_round + 1]]
+        
+        # total_indices is just the flat-list version of subcirc_gates_indices
+        #total_indices += subcirc_gates_indices[-1]
+
+    #sorted_total_indices = sorted(total_indices)
+
+    # group the selected gates
+    gate_groups = []
+    for gate in total_selected_gates:
+        in_group = False
+        for group in gate_groups:
+            for g in group:
+                if g[:-1] == gate[:-1]:
+                    group.insert(0, gate)
+                    in_group = True
+                    break
+        if not in_group:
+            gate_groups += [[gate]]
+
+    #print 'total selected gates =', total_selected_gates
+    #print 'gate groups =', gate_groups
+
+    # insert errors
+    for group in gate_groups:
+        local_gates = [g[-1] for g in group]
+        if len(group[0]) >= 2:
+            faulty_circ = latt_circs.gates[group[0][0]].circuit_list[0]
+        if len(group[0]) >= 3:
+            faulty_circ = faulty_circ.gates[group[0][1]].circuit_list[0]
+        if len(group[0]) == 4:
+            faulty_circ = faulty_circ.gates[group[0][2]].circuit_list[0]
+
+        error.add_error_alternative(faulty_circ, error_info, 'Muyalon', local_gates)
+
+    return
+
+
+
 def add_errors_fast_sampler_color(gate_indices, n_errors, subcircs, error_info):
     '''
     '''
@@ -3367,10 +3446,13 @@ def gates_list_CNOT(CNOT_circuits, faulty_gates_names):
                                 elif len(in_gate3.qubits) == 2:
                                     two_qubit_gates.append((i,j,k,l))
 
-        elif supra_gate.gate_name == 'MeasureXX_flags':
+        elif supra_gate.gate_name[:9]=='MeasureXX' or supra_gate.gate_name[:9]=='MeasureZZ':
             for j in range(len(supra_gate.circuit_list[0].gates)):
                 in_gate1 = supra_gate.circuit_list[0].gates[j]
-                if in_gate1.gate_name[0] == 'X':
+                clauseX = in_gate1.gate_name[0] == 'X'
+                clauseZ = in_gate1.gate_name[0] == 'Z'
+                clauseC = in_gate1.gate_name[0] == 'C'
+                if (clauseX or clauseZ) or clauseC:
                     for k in range(len(in_gate1.circuit_list[0].gates)):
                         in_gate2 = in_gate1.circuit_list[0].gates[k]
                         if in_gate2.gate_name in faulty_gates_names:
@@ -3379,7 +3461,7 @@ def gates_list_CNOT(CNOT_circuits, faulty_gates_names):
                             elif len(in_gate2.qubits) == 2:
                                 two_qubit_gates.append((i,j,k))
                 
-                elif in_gate1.gate_name[:4] == 'QECX':
+                elif in_gate1.gate_name[:3] == 'QEC':
                     for k in range(len(in_gate1.circuit_list[0].gates)):
                         in_gate2 = in_gate1.circuit_list[0].gates[k]
                         for l in range(len(in_gate2.circuit_list[0].gates)):
@@ -3391,3 +3473,65 @@ def gates_list_CNOT(CNOT_circuits, faulty_gates_names):
                                     two_qubit_gates.append((i,j,k,l))
                                 
     return single_qubit_gates, two_qubit_gates
+    
+
+
+def gates_list_CNOT_general(CNOT_circuits, faulty_gates_names_grouped):
+    '''
+    improvised function to calculate the indices for 1-qubit and 2-qubit gates
+    '''
+    
+    out_gates_lists = [[] for group in faulty_gates_names_grouped] 
+
+    for i in range(len(CNOT_circuits.gates)):
+        supra_gate = CNOT_circuits.gates[i] 
+        if supra_gate.gate_name == 'Logical_I' or supra_gate.gate_name == 'MeasureX':
+            for j in range(len(supra_gate.circuit_list[0].gates)):
+                in_gate1 = supra_gate.circuit_list[0].gates[j]
+                for fgg in range(len(out_gates_lists)):
+                    if in_gate1.gate_name in faulty_gates_names_grouped[fgg]:
+                        out_gates_lists[fgg].append((i,j))
+                 
+        elif supra_gate.gate_name[:8] == 'Measure2' or supra_gate.gate_name[:5] == 'Joint':
+            for j in range(len(supra_gate.circuit_list[0].gates)):
+                in_gate1 = supra_gate.circuit_list[0].gates[j]
+                if in_gate1.gate_name[:7] == 'Partial':
+                    for k in range(len(in_gate1.circuit_list[0].gates)):
+                        in_gate2 = in_gate1.circuit_list[0].gates[k]
+                        for fgg in range(len(out_gates_lists)):
+                            if in_gate2.gate_name in faulty_gates_names_grouped[fgg]:
+                                out_gates_lists[fgg].append((i,j,k))
+                      
+                elif in_gate1.gate_name[:2] == 'EC':
+                    for k in range(len(in_gate1.circuit_list[0].gates)):
+                        in_gate2 = in_gate1.circuit_list[0].gates[k]
+                        for l in range(len(in_gate2.circuit_list[0].gates)):
+                            in_gate3 = in_gate2.circuit_list[0].gates[l]
+                            for fgg in range(len(out_gates_lists)):
+                                if in_gate3.gate_name in faulty_gates_names_grouped[fgg]:
+                                    out_gates_lists[fgg].append((i,j,k,l))
+
+        elif supra_gate.gate_name[:9]=='MeasureXX' or supra_gate.gate_name[:9]=='MeasureZZ':
+            for j in range(len(supra_gate.circuit_list[0].gates)):
+                in_gate1 = supra_gate.circuit_list[0].gates[j]
+                clauseX = in_gate1.gate_name[0] == 'X'
+                clauseZ = in_gate1.gate_name[0] == 'Z'
+                clauseC = in_gate1.gate_name[0] == 'C'
+                if (clauseX or clauseZ) or clauseC:
+                    for k in range(len(in_gate1.circuit_list[0].gates)):
+                        in_gate2 = in_gate1.circuit_list[0].gates[k]
+                        for fgg in range(len(out_gates_lists)):
+                            if in_gate2.gate_name in faulty_gates_names_grouped[fgg]:
+                                out_gates_lists[fgg].append((i,j,k))
+                        
+                elif in_gate1.gate_name[:3] == 'QEC':
+                    for k in range(len(in_gate1.circuit_list[0].gates)):
+                        in_gate2 = in_gate1.circuit_list[0].gates[k]
+                        for l in range(len(in_gate2.circuit_list[0].gates)):
+                            in_gate3 = in_gate2.circuit_list[0].gates[l]
+                            for fgg in range(len(out_gates_lists)):
+                                if in_gate3.gate_name in faulty_gates_names_grouped[fgg]:
+                                    out_gates_lists[fgg].append((i,j,k,l))
+                                
+    return out_gates_lists
+    

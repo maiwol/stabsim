@@ -386,6 +386,279 @@ class Measure_2_logicals(Quantum_Operation):
         return parity, (len(low_w), len(high_w)), corr_nonanc, corr_anc
           
 
+    
+    def run_boundary_oper_flags_short_ion(self, error_det=False):
+        '''
+        Short version:  we run X2 (Z2) first two or three times and then
+        X4 (Z4) one (or two or three times).
+        This is adapted for the scheduled circuit for ion traps
+        '''
+    
+        first_subcirc_i = 0
+        subcircs_run = []
+        subcircs_run_QECnonanc = {}
+        subcircs_run_QECanc = {}
+        for i in range(10):
+            subcircs_run_QECnonanc[i] = 0
+            subcircs_run_QECanc[i] = 0
+        
+
+        # list of outcomes of the low-weight and high-weight operators
+        low_w, high_w = [], []
+            
+        # (1) Measure the low-weight operator
+        # We need to flip the outcome because there are 2 MS gates
+        low_w += [(self.run_one_circ(first_subcirc_i).values()[0][0]+1)%2]
+        subcircs_run += [first_subcirc_i] 
+        
+        if error_det:
+            # (2) Transport ion back to ancilla arm
+            self.run_one_circ(first_subcirc_i+2)
+            subcircs_run += [first_subcirc_i+2] 
+
+            # (3) Measure the high-weight operator
+            # In this case, we don't flip the outcome because there are 4 MS gates
+            high_w += [self.run_one_circ(first_subcirc_i+4).values()[0][0]]
+            subcircs_run += [first_subcirc_i+4] 
+
+            # Define the dictionary with the subcircs that were run
+            subcircs_run_dict = {}
+            for i in range(13):
+                if i==9:
+                    subcircs_run_dict[i] = subcircs_run_QECnonanc
+                elif i==10:
+                    subcircs_run_dict[i] = subcircs_run_QECanc
+                else:
+                    if i in subcircs_run:
+                        subcircs_run_dict[i] = 1
+                    else:
+                        subcircs_run_dict[i] = 0
+
+            # If an error has already been detected in a previous step of
+            # the supra-circuit, we only need to measure the two operators
+            # once.
+            output = [low_w, high_w, [0,0,0], [0,0,0]] 
+            output += [[0,0,0], [0,0,0], 'normal', 'normal', True, subcircs_run_dict]
+            return tuple(output)
+
+        
+        # (2) Measure low-weight operator second time
+        # We need to flip the outcome because there are 2 MS gates
+        low_w += [(self.run_one_circ(first_subcirc_i+1).values()[0][0]+1)%2]
+        subcircs_run += [first_subcirc_i+1] 
+
+        # If the two outcomes are equal, we now measure the high-weight
+        if low_w[0]==low_w[1]:
+           
+            # (3) Transport ion back to ancilla arm
+            self.run_one_circ(first_subcirc_i+2)
+            subcircs_run += [first_subcirc_i+2] 
+
+            # (4) Measure the high-weight operator twice
+            high_w += [self.run_one_circ(first_subcirc_i+5).values()[0][0]]
+            subcircs_run += [first_subcirc_i+5] 
+            high_w += [self.run_one_circ(first_subcirc_i+6).values()[0][0]]
+            subcircs_run += [first_subcirc_i+6] 
+            
+            # If the two outcomes are equal, we now do QEC on both logical qubits
+            if high_w[0]==high_w[1]:
+
+                #print 'Im here!'
+
+                # (5) Transport two ions back to ancilla arm
+                self.run_one_circ(first_subcirc_i+7)
+                subcircs_run += [first_subcirc_i+7] 
+
+                # (6) First QEC (FT) on target (if X) or control (if Z)
+                QEC_supracirc = self.circuits[first_subcirc_i+9]
+                subcircs_run += [first_subcirc_i+9] 
+                QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+                QEC_nonanc = QEC_with_flags([self.stabs, self.destabs], QEC_circs, self.chp_loc)
+                outputQEC_nonanc = QEC_nonanc.run_QEC_FT_lattsurg_ion()
+                s_targ1, f_targ1, corr_targ, error_det_targ, subc_nonanc = outputQEC_nonanc
+                for subcirc_i in subc_nonanc:
+                    subcircs_run_QECnonanc[subcirc_i] = 1
+                self.stabs, self.destabs = QEC_nonanc.stabs[:], QEC_nonanc.destabs[:]
+       
+                # (6) First QEC (FT) on ancilla 
+                QEC_supracirc = self.circuits[first_subcirc_i+10]
+                subcircs_run += [first_subcirc_i+10] 
+                QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+                QEC_anc = QEC_with_flags([self.stabs, self.destabs], QEC_circs, self.chp_loc)
+                outputQEC_anc = QEC_anc.run_QEC_FT_lattsurg_ion()
+                s_anc1, f_anc1, corr_anc, error_det_anc, subc_anc = outputQEC_anc
+                for subcirc_i in subc_anc:
+                    subcircs_run_QECanc[subcirc_i] = 1
+                self.stabs, self.destabs = QEC_anc.stabs[:], QEC_anc.destabs[:]
+    
+                #print 's_targ1 =', s_targ1
+                #print 'corr targ =', corr_targ
+                #print 's_anc1 =', s_anc1
+                #print 'corr anc =', corr_anc 
+
+                #print 'f_targ1 =', f_targ1
+                #print 'f_anc1 =', f_anc1
+
+                if corr_targ=='normal' and corr_anc=='normal':
+                    error_det_total = error_det_targ or error_det_anc
+
+                else:
+                    error_det_total = True
+                    
+                    clause_targ = (s_targ1[1]==0 and s_targ1[2]==1)
+                    clause_anc = (s_anc1[1]==0 and s_anc1[2]==1)
+                    clause_flag = (sum(f_targ1)==0 and sum(f_anc1)==0)
+
+                    #print clause_targ
+                    #print clause_anc
+                    #print clause_flag
+
+                    # if the error happened on one of the qubits involved in X2, then
+                    # only re-measure X2.
+                    if (clause_targ or clause_anc) and clause_flag:
+                        # (7) Measure low-weight operator third time
+                        low_w_3rd = self.run_one_circ(first_subcirc_i+11).values()[0][0]
+                        subcircs_run += [first_subcirc_i+11] 
+                        low_w += [(low_w_3rd+1)%2]
+                        if low_w[2]!=low_w[1]:
+                            corr_targ, corr_anc = 'normal', 'normal'
+                            # the correct eigenvalue of low_w was the first one.
+                            low_w[2] = low_w[0]
+
+                        else:
+                            if corr_targ=='unknown':  corr_targ = 'alternative'
+                            if corr_anc=='unknown':  corr_anc = 'alternative'
+                    
+                    # else re-measure only X4
+                    else:
+                        # (8) Measure high-weight operator third time
+                        high_w += [self.run_one_circ(first_subcirc_i+12).values()[0][0]]
+                        subcircs_run += [first_subcirc_i+12] 
+                    
+                        #print high_w
+                        if high_w[2]!=high_w[1]:
+                            corr_targ, corr_anc = 'normal', 'normal'
+                            # the correct eigenvalue of low_w was the first one.
+                            high_w[2] = high_w[0]
+                        
+                        else:
+                            if corr_targ=='unknown':  corr_targ = 'alternative'
+                            if corr_anc=='unknown':  corr_anc = 'alternative'
+                
+
+            # If X4 (Z4) changed, then re-measure X4 (Z4).
+            elif high_w[0]!=high_w[1]:
+                error_det_total = True
+                corr_targ, corr_anc = 'normal', 'normal'
+                high_w += [self.run_one_circ(first_subcirc_i+8).values()[0][0]]
+                subcircs_run += [first_subcirc_i+8] 
+            
+                # if the second and the third are the same, we still cannot distinguish between 
+                # a measurement error and a data error.  We measure the last stabilizer 
+                # of both logical qubits nonFT
+                if high_w[1]==high_w[2]:
+                    # QEC on target or control
+                    QEC_supracirc = self.circuits[first_subcirc_i+9]
+                    subcircs_run += [first_subcirc_i+9] 
+                    QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+                    QEC_targ = QEC_with_flags([self.stabs, self.destabs], 
+                                               QEC_circs, self.chp_loc)
+                    outputQEC_targ = QEC_targ.run_QEC_FT_lattsurg_ion(stab=1)
+                    s_targ1, f_targ1, corr_targ, error_det_targ, subc_targ = outputQEC_targ
+                    for subcirc_i in subc_targ:
+                        subcircs_run_QECnonanc[subcirc_i] = 1
+                    self.stabs, self.destabs = QEC_targ.stabs[:], QEC_targ.destabs[:]
+       
+                    # QEC on ancilla 
+                    QEC_supracirc = self.circuits[first_subcirc_i+10]
+                    subcircs_run += [first_subcirc_i+10] 
+                    QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+                    QEC_anc = QEC_with_flags([self.stabs, self.destabs], QEC_circs, self.chp_loc)
+                    outputQEC_anc = QEC_anc.run_QEC_FT_lattsurg_ion(stab=1)
+                    s_anc1, f_anc1, corr_anc, error_det_anc, subc_anc = outputQEC_anc
+                    for subcirc_i in subc_anc:
+                        subcircs_run_QECanc[subcirc_i] = 1
+                    self.stabs, self.destabs = QEC_anc.stabs[:], QEC_anc.destabs[:]
+
+                    # if an error was detected, then trust the first high-weight value
+                    if s_targ1[1]==1 or s_anc1[1]==1:
+                        high_w[2] = high_w[0]
+            
+                    #print 'f_targ1 =', f_targ1
+                    #print 'f_anc1 =', f_anc1
+            
+                else:
+                    s_targ1, f_targ1 = [0,0,0], [0,0,0]
+                    s_anc1, f_anc1 = [0,0,0], [0,0,0]
+
+        
+        # If X2 (Z2) changed, measure X2 (Z2) a third time and measure X4 (Z4) one time only 
+        elif low_w[0]!=low_w[1]:
+            error_det_total = True
+            corr_targ, corr_anc = 'normal', 'normal'
+            low_w += [(self.run_one_circ(first_subcirc_i+3).values()[0][0]+1)%2]
+            subcircs_run += [first_subcirc_i+3] 
+            
+            # Measure the high-weight operator only once
+            high_w += [self.run_one_circ(first_subcirc_i+4).values()[0][0]]
+            subcircs_run += [first_subcirc_i+4] 
+
+            # if the second and the third for the low-weight are the same, we still 
+            # cannot distinguish between a measurement error and a data error.  
+            # We measure the last stabilizer of both logical qubits nonFT
+            if low_w[1]==low_w[2]:
+                # QEC on target or control
+                QEC_supracirc = self.circuits[first_subcirc_i+9]
+                subcircs_run += [first_subcirc_i+9] 
+                QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+                QEC_targ = QEC_with_flags([self.stabs, self.destabs], QEC_circs, self.chp_loc)
+                outputQEC_targ = QEC_targ.run_QEC_FT_lattsurg_ion(stab=2)
+                s_targ1, f_targ1, corr_targ, error_det_targ, subc_targ = outputQEC_targ
+                for subcirc_i in subc_targ:
+                    subcircs_run_QECnonanc[subcirc_i] = 1
+                self.stabs, self.destabs = QEC_targ.stabs[:], QEC_targ.destabs[:]
+       
+                # QEC on ancilla 
+                QEC_supracirc = self.circuits[first_subcirc_i+10]
+                subcircs_run += [first_subcirc_i+10] 
+                QEC_circs = [gate.circuit_list[0] for gate in QEC_supracirc.gates]
+                QEC_anc = QEC_with_flags([self.stabs, self.destabs], QEC_circs, self.chp_loc)
+                outputQEC_anc = QEC_anc.run_QEC_FT_lattsurg_ion(stab=2)
+                s_anc1, f_anc1, corr_anc, error_det_anc, subc_anc = outputQEC_anc
+                for subcirc_i in subc_anc:
+                    subcircs_run_QECanc[subcirc_i] = 1
+                self.stabs, self.destabs = QEC_anc.stabs[:], QEC_anc.destabs[:]
+
+                # if an error was detected, then trust the first X2 value
+                if s_targ1[2]==1 or s_anc1[2]==1:
+                    low_w[2] = low_w[0]
+            
+                #print 'f_targ1 =', f_targ1
+                #print 'f_anc1 =', f_anc1
+
+            else:
+                s_targ1, f_targ1 = [0,0,0], [0,0,0]
+                s_anc1, f_anc1 = [0,0,0], [0,0,0]
+            
+        
+        # Define the dictionary with the subcircs that were run
+        subcircs_run_dict = {}
+        for i in range(13):
+            if i==9:
+                subcircs_run_dict[i] = subcircs_run_QECnonanc
+            elif i==10:
+                subcircs_run_dict[i] = subcircs_run_QECanc
+            else:
+                if i in subcircs_run:
+                    subcircs_run_dict[i] = 1
+                else:
+                    subcircs_run_dict[i] = 0
+
+        output = [low_w, high_w, [s_targ1], [s_anc1]] 
+        output += [f_targ1, f_anc1, corr_targ, corr_anc, error_det_total, subcircs_run_dict]
+        return tuple(output)
+
+
 
     def run_boundary_oper_flags_short(self, error_det=False):
         '''
@@ -400,12 +673,12 @@ class Measure_2_logicals(Quantum_Operation):
 
         # (2) Measure low-weight operator first time
         low_w += [self.run_one_circ(first_subcirc_i).values()[0][0]]
-        print 'low_w1 =', low_w[0]
+        #print 'low_w1 =', low_w[0]
        
         if error_det:
             # (3) Measure high-weight operator first time
             high_w += [self.run_one_circ(first_subcirc_i+1).values()[0][0]]
-            print 'high_w1 =', high_w[0]
+            #print 'high_w1 =', high_w[0]
        
             # If an error has already been detected in a previous step of
             # the supra-circuit, we only need to measure the two operators
@@ -445,13 +718,13 @@ class Measure_2_logicals(Quantum_Operation):
                 s_anc1, f_anc1, corr_anc, error_det_anc = outputQEC_anc
                 self.stabs, self.destabs = QEC_anc.stabs[:], QEC_anc.destabs[:]
     
-                print 's_targ1 =', s_targ1
+                #print 's_targ1 =', s_targ1
                 #print 'corr targ =', corr_targ
-                print 's_anc1 =', s_anc1
+                #print 's_anc1 =', s_anc1
                 #print 'corr anc =', corr_anc 
 
-                print 'f_targ1 =', f_targ1
-                print 'f_anc1 =', f_anc1
+                #print 'f_targ1 =', f_targ1
+                #print 'f_anc1 =', f_anc1
 
                 if corr_targ=='normal' and corr_anc=='normal':
                     error_det_total = error_det_targ or error_det_anc
@@ -486,7 +759,7 @@ class Measure_2_logicals(Quantum_Operation):
                         # (8) Measure high-weight operator third time
                         high_w += [self.run_one_circ(first_subcirc_i+7).values()[0][0]]
                     
-                        print high_w
+                        #print high_w
                         if high_w[2]!=high_w[1]:
                             corr_targ, corr_anc = 'normal', 'normal'
                             # the correct eigenvalue of low_w was the first one.
@@ -2293,6 +2566,169 @@ class QEC_with_flags(Quantum_Operation):
             
     
     
+    def run_QEC_FT_lattsurg_ion(self, stab='all'):
+        '''
+        output:  syndrome, flags, type of correction, error detected
+        if stab=='all', we measure all the stabilizers the usual way
+        if stab==2, we only measure the last stabilizer nonFT
+        if stab==1, we only measure the second stabilizer nonFT
+        '''
+
+        corr_type = 'normal'
+        error_det = True
+        subcircs_run = []
+
+        # All the FT circuits have a number of MS, n, gates such that
+        # n(mod4) = 2, that is 6 for the s qubit and 2 for the f qubit.
+        # Therefore we have to flip the outcomes.
+        # We don't have to flip the outcomes for the nonFT one, which
+        # has 4 MS gates.
+    
+        if stab==2:
+            syn3 = self.run_one_circ(7).values()[0][0]
+            subcircs_run += [7] 
+            # reorder from stab 2 to 0
+            self.run_one_circ(9)
+            subcircs_run += [9] 
+            return [0,0,syn3], [0,0,0], corr_type, error_det, subcircs_run
+            
+        elif stab==1:
+            syn2 = self.run_one_circ(6).values()[0][0]
+            subcircs_run += [6] 
+            # reorder from stab 1 to 0
+            self.run_one_circ(8)
+            subcircs_run += [8] 
+            return [0,syn2,0], [0,0,0], corr_type, error_det, subcircs_run
+
+
+        # first we measure the stabilizer that doesn't "touch" the boundary
+        output_first = self.run_one_circ(0).values()
+        subcircs_run += [0] 
+        syn1, flag1 = (output_first[0][0]+1)%2, (output_first[1][0]+1)%2
+   
+        #print 'syn1 =', syn1
+        #print 'flag1 =', flag1
+
+        # if an error is detected, we're done
+        if syn1==1 or flag1==1:
+            total_syn, total_flag = [syn1,0,0], [flag1,0,0]
+        
+        else:
+            # measure the second stabilizer FT
+            output_second = self.run_one_circ(1).values()
+            subcircs_run += [1] 
+            syn2, flag2 = (output_second[0][0]+1)%2, (output_second[1][0]+1)%2
+           
+            #print 'syn2 =', syn2
+            #print 'flag2 =', flag2
+            
+            # if the flag was triggered, we're done
+            if flag2==1:
+                # reorder from stab 1 to 0
+                self.run_one_circ(3)
+                subcircs_run += [3] 
+                total_syn, total_flag = [syn1,syn2,0], [flag1,flag2,0]
+            
+            else:
+                # if an error was detected, measure the first stab nonFT to
+                # make distinguish between (1) an error that happened on one of
+                # qubits of the first and second stabs after the first stab was
+                # measured and (2) an error that happened on one of the qubits
+                # of the second stab not shared with the first stab.
+                if syn2==1:
+                
+                    # Reorder from 1 to 0
+                    self.run_one_circ(3)
+                    subcircs_run += [3] 
+                    syn1 = self.run_one_circ(5).values()[0][0]
+                    subcircs_run += [5] 
+                    #print 'syn1 (second time) =', syn1
+                    
+                    # if syn1 is 1, then it was the first option and we're done
+                    if syn1==1:
+                        total_syn, total_flag = [syn1,syn2,0], [flag1,flag2,0]
+                    
+                    # else: measure the second stab again, this time nonFT
+                    else:
+                        syn2 = self.run_one_circ(6).values()[0][0]
+                        subcircs_run += [6] 
+                        #print 'syn2 (second time) =', syn2
+                    
+                        # if the syndrome is 0 this time, that means it was a
+                        # measurement error and we're done.
+                        if syn2==0:
+                            # reorder from 1 to 0
+                            self.run_one_circ(8)
+                            subcircs_run += [8] 
+                            total_syn, total_flag = [syn1,syn2,0], [flag1,flag2,0]
+
+                        # if the syndrome was 1 the second time, it was a data error
+                        # and we need to measure the third stabilizer nonFT.
+                        else:
+                            syn3 = self.run_one_circ(7).values()[0][0]
+                            subcircs_run += [7] 
+                            print 'syn3 =', syn3
+                            # reorder from 2 to 0
+                            self.run_one_circ(9)
+                            subcircs_run += [9] 
+                            total_syn, total_flag = [syn1,syn2,syn3], [flag1,flag2,0]
+                            corr_type = 'unknown'
+
+                # if no error was detected, measure the third stabilizer FT
+                else:
+                    output_third = self.run_one_circ(2).values()
+                    subcircs_run += [2] 
+                    syn3, flag3 = (output_third[0][0]+1)%2, (output_third[1][0]+1)%2
+                    total_syn, total_flag = [syn1,syn2,syn3], [flag1,flag2,flag3]
+                    # reorder from 2 to 0
+                    self.run_one_circ(4)
+                    subcircs_run += [4] 
+
+                    # if the third flag wasn't triggered
+                    if flag3==0:
+                        
+                        # if the flag is 0, but the third syndrome is 1, we need
+                        # to measure the stabilizers again
+                        if syn3==1:
+                            syn1 = self.run_one_circ(5).values()[0][0]
+                            subcircs_run += [5] 
+                            
+                            # if syn1 is 1, the error was on a non-boundary data qubit
+                            # after the first stabilizer
+                            if syn1==1:
+                                total_syn = [syn1,syn2,syn3]
+                                total_flag = [flag1,flag2,flag3]
+                            else:
+                                syn2 = self.run_one_circ(6).values()[0][0]
+                                subcircs_run += [6] 
+                                # if syn2 is 1, the error was on a boundary qubit
+                                if syn2==1:
+                                    # reorder from 1 to 0
+                                    self.run_one_circ(8)
+                                    subcircs_run += [8] 
+                                    total_syn = [syn1,syn2,syn3]
+                                    total_flag = [flag1,flag2,flag3]
+                                    corr_type = 'unknown'
+                                else:
+                                    syn3 = self.run_one_circ(7).values()[0][0]
+                                    subcircs_run += [7] 
+                                    # reorder from 2 to 0
+                                    self.run_one_circ(9)
+                                    subcircs_run += [9] 
+                                    total_syn = [syn1,syn2,syn3]
+                                    total_flag = [flag1,flag2,flag3]
+                                    # if the syndrome is 1 again, it was a data error
+                                    if syn3==1:
+                                        corr_type = 'unknown'
+                                        
+
+                        else:
+                            error_det = False
+
+        return total_syn, total_flag, corr_type, error_det, subcircs_run
+    
+   
+
     def run_QEC_FT_lattsurg(self, stab='all'):
         '''
         output:  syndrome, flags, type of correction, error detected
@@ -2718,7 +3154,300 @@ class QEC_with_flags(Quantum_Operation):
         #return error_det, outflags1, outflags2
         return error_det
     
+    
+    
+    def run_jointQECZ_ion(self, error_det, inflags1, inflags2):
+        '''
+        error_det:  True if an error has already been detected
+                    False otherwise.
+                    If error_det is True, then we just run the
+                    stabilizers 1 time nonFT.
+        flags1:  the previous flags for the first logical qubit
+        flags2:  the previous flags for the second logical qubit
+        '''
+
+        error_index = 1
+        Pauli_error = 'X'
+        n_subcirc = 14
+        
+        subcircs_run_QECnonanc = {}
+        subcircs_run_QECanc = {}
+        for i in range(n_subcirc):
+            subcircs_run_QECnonanc[i] = 0
+            subcircs_run_QECanc[i] = 0
+
+        #print error_det, inflags1, inflags2
+        
+        # undefined stab is the index of the stabilizer that is undefined.
+        # With the current numbering, it's the second stab (stab 1)
+        undefined_stab = 1
+
+        outflags1, outflags2 = [], []
+        if error_det:
+            # In this case, we just run the non-FT circuits
+        
+            # Because the order of the stabilizer measurements in the QECx during
+            # the merging step is different from the standard order, we need to
+            # change the flag orderings
+            inflags1 = [inflags1[1], inflags1[2], inflags1[0]]
+            inflags2 = [inflags2[1], inflags2[2], inflags2[0]]
+
+            # First logical qubit
+            syn1 = []
+            for i in range(5,8):
+                syn1 += [self.run_one_circ(i).values()[0][0]]
+                subcircs_run_QECnonanc[i] = 1
+            # Reorder 2 to 0
+            self.run_one_circ(13)
+            subcircs_run_QECnonanc[13] = 1
+
+            # Second logical qubit
+            syn2 = []
+            for i in range(n_subcirc+5,n_subcirc+8):
+                syn2 += [self.run_one_circ(i).values()[0][0]]
+                subcircs_run_QECanc[i] = 1
+            # Reorder 2 to 0
+            self.run_one_circ(n_subcirc+13)
+            subcircs_run_QECanc[13] = 1
+            
+            outflags1, outflags2 = [0,0,0], [0,0,0]
+
+
+        else:
+            # In this case, both inflags are [0,0,0]
+
+            ##########################################################################
+            # Alternative:  only measure the undefined stabilizers
+            error_det1 = False
+            syn1 = []
+            out_run1 = self.run_one_circ(1).values()
+            subcircs_run_QECnonanc[1] = 1
+            # Because the sub-circuit has 6 MS gates, we flip the outcomes
+            syn1 += [(out_run1[0][0]+1)%2]
+            outflags1 = (out_run1[1][0]+1)%2
+            if outflags1==1:  error_det1 = True
+
+            #brow.from_circuit(self.circuits[1], True)
+
+            #print 'syn1 =', syn1
+            #print 'outflags1 =', outflags1
+
+            error_det2 = False
+            syn2 = []
+            out_run2 = self.run_one_circ(n_subcirc+1).values()
+            subcircs_run_QECanc[1] = 1
+            # Because the sub-circuit has 6 MS gates, we flip the outcomes
+            syn2 += [(out_run2[0][0]+1)%2]
+            outflags2 = (out_run2[1][0]+1)%2
+            if outflags2==1:  error_det2 = True
+            
+            #brow.from_circuit(self.circuits[7], True)
+            #sys.exit(0)
+
+            #print 'syn2 =', syn2
+            #print 'outflags2 =', outflags2
+            
+            # If a flag was triggered in either one of the stabs, error_det = True
+            error_det = error_det1 or error_det2
+            
+            # If both syndromes were 1, correct both stabilizers
+            if syn1[0]==1 and syn2[0]==1:
+                total_corr1 = ['X' if i==1 else 'I' for i in range(7)]
+                total_corr2 = ['X' if i==1 else 'I' for i in range(7)]
+    
+                total_corr = ['I' for i in range(7)] + total_corr1[:] + total_corr2[:]
+                corr_state = qfun.update_stabs(self.stabs, self.destabs, total_corr)
+                self.stabs = corr_state[0][:]
+                self.destabs = corr_state[1][:]
+
+                # if that flag was not triggered we reorder from stab 1 to stab 0
+                # and we're done.
+                if outflags1==0:
+                    self.run_one_circ(12)
+                    subcircs_run_QECnonanc[12] = 1
+                if outflags2==0:
+                    self.run_one_circ(n_subcirc+12)
+                    subcircs_run_QECanc[12] = 1
+
+
+            # If the 2 syndromes are different, error_det = True and we measure
+            # the other 2 stabilizer pairs with no flags.
+            # First we measure the other boundary stabilizer
+            elif syn1[0] != syn2[0]:
+                error_det = True
+                # reorder from 1 to 0
+                self.run_one_circ(3)
+                subcircs_run_QECnonanc[3] = 1
+                syn1 += [self.run_one_circ(5).values()[0][0]]
+                subcircs_run_QECnonanc[5] = 1
+                # reorder from 1 to 0
+                self.run_one_circ(n_subcirc+3)
+                subcircs_run_QECanc[3] = 1
+                syn2 += [self.run_one_circ(n_subcirc+5).values()[0][0]]
+                subcircs_run_QECanc[5] = 1
+
+                #print 'syn1 =', syn1
+                #print 'syn2 =', syn2
+
+                #brow.from_circuit(self.circuits[3], True)
+                #brow.from_circuit(self.circuits[9], True)
+
+                # If an error has been detected on both logical qubits, we
+                # apply a correction on both qubits 1.
+                if (1 in syn1) and (1 in syn2):
+                    total_corr1 = ['X' if i==1 else 'I' for i in range(7)]
+                    total_corr2 = ['X' if i==1 else 'I' for i in range(7)]
+    
+                    total_corr = ['I' for i in range(7)] + total_corr1[:] + total_corr2[:]
+                    corr_state = qfun.update_stabs(self.stabs, self.destabs, total_corr)
+                    self.stabs = corr_state[0][:]
+                    self.destabs = corr_state[1][:]
+                
+                else:
+                    syn1 += [self.run_one_circ(7).values()[0][0]]
+                    subcircs_run_QECnonanc[7] = 1
+                    syn2 += [self.run_one_circ(n_subcirc+7).values()[0][0]]
+                    subcircs_run_QECanc[7] = 1
+                   
+                    #print 'syn1 =', syn1
+                    #print 'syn2 =', syn2
+
+                    if (1 in syn1) and (1 in syn2):
+                        total_corr1 = ['X' if i==1 else 'I' for i in range(7)]
+                        total_corr2 = ['X' if i==1 else 'I' for i in range(7)]
+    
+                        total_corr = ['I' for i in range(7)] + total_corr1[:] + total_corr2[:]
+                        corr_state = qfun.update_stabs(self.stabs, self.destabs, total_corr)
+                        self.stabs = corr_state[0][:]
+                        self.destabs = corr_state[1][:]
+                        
+                        # if the flag was triggered, we reorder from 2 to 1
+                        if outflags1==1:
+                            self.run_one_circ(8)
+                            subcircs_run_QECnonanc[8] = 1
+                        if outflags2==1:
+                            self.run_one_circ(n_subcirc+8)
+                            subcircs_run_QECanc[8] = 1
+
+                    
+            # If the measurement outcomes of both undefined stabilizers is 0, we're done.
+           
+            #print 'outflags =', outflags1, outflags2
+
+            total_corr1 = ['I' for i in range(7)]
+            if outflags1==1:
+                syn_flags1 = []
+                syn_flags1 += [self.run_one_circ(10).values()[0][0]]
+                subcircs_run_QECnonanc[10] = 1
+                syn_flags1 += [self.run_one_circ(11).values()[0][0]]
+                subcircs_run_QECnonanc[11] = 1
+                # Reorder from stab 2 to 0
+                self.run_one_circ(13)
+                subcircs_run_QECnonanc[13] = 1
+
+                #print 'synflags1 =', syn_flags1
+
+                if sum(syn_flags1) > 0:
+                    if syn_flags1[0] == 0:
+                        total_corr1[1] = 'Z'
+                        total_corr1[2] = 'Z'
+                    else:
+                        if syn_flags1[1] == 0:
+                            total_corr1[1] = 'Z'
+                        else:
+                            total_corr1[6] = 'Z'
+
+            total_corr2 = ['I' for i in range(7)]
+            if outflags2==1:
+                syn_flags2 = []
+                syn_flags2 += [self.run_one_circ(n_subcirc+10).values()[0][0]]
+                subcircs_run_QECanc[10] = 1
+                syn_flags2 += [self.run_one_circ(n_subcirc+11).values()[0][0]]
+                subcircs_run_QECanc[11] = 1
+                # Reorder from stab 2 to 0
+                self.run_one_circ(n_subcirc+13)
+                subcircs_run_QECanc[13] = 1
+                if sum(syn_flags2) > 0:
+                    if syn_flags2[0] == 0:
+                        total_corr2[1] = 'Z'
+                        total_corr2[2] = 'Z'
+                    else:
+                        if syn_flags2[1] == 0:
+                            total_corr2[1] = 'Z'
+                        else:
+                            total_corr2[6] = 'Z'
+           
+            if (outflags1==1) or (outflags2==1):
+                if (total_corr1.count('Z') > 0) or (total_corr2.count('Z') > 0):
+                    total_corr = ['I' for i in range(7)] + total_corr1[:] + total_corr2[:]
+                    #print 'total corr =', total_corr
+                    corr_state = qfun.update_stabs(self.stabs, self.destabs, total_corr)
+                    self.stabs = corr_state[0][:]
+                    self.destabs = corr_state[1][:]
+                
+            return error_det, subcircs_run_QECnonanc, subcircs_run_QECanc
+                
+            ##########################################################################
+
+
+        
+        outflags1 += [0 for i in range(3-len(outflags1))]
+        outflags2 += [0 for i in range(3-len(outflags2))]
+            
+        #print 'error det 1 =', error_det1
+        #print 'error det 2 =', error_det2
+
+        #print 'error_det =', error_det
+        #print 'syns =', syn1, syn2
+        #print 'outflags =', outflags1, outflags2
+    
+        base_corr1 = ['I' for i in range(7)]
+        base_corr2 = ['I' for i in range(7)]
+        
+        if sum(syn1)>0 and sum(syn2)>0:
+            # if both syndromes are non-trivial, we always apply a correction
+            # on qubit 1 to account for the fact that the measurement outcomes
+            # on stabilizers (1,2,5,6) are random.
+            base_corr1[error_index] = Pauli_error
+            base_corr2[error_index] = Pauli_error
+    
+            syn1[1] = (syn1[1]+1)%2
+            syn2[1] = (syn2[1]+1)%2
+
+        # if the target flag was triggered in the previous step
+        if sum(inflags1)>0:
+            # if the target syndrome doesn't show an error, but the ancilla syndrome does,
+            # then flip the random stabilizers.
+            if sum(syn1) < sum(syn2):
+                syn1[error_index] = 1
+                syn2[error_index] = 0
+        
+        elif sum(inflags2)>0:
+            if sum(syn1) > sum(syn2):
+                syn1[error_index] = 0
+                syn2[error_index] = 1
+            
+        new_corr1 = st.Code.total_lookup_table_one_flag[tuple(inflags1)][tuple(syn1)]
+        new_corr1 = [Pauli_error if oper=='E' else oper for oper in new_corr1]
+        total_corr1 = ['I' if base_corr1[i]==new_corr1[i] else Pauli_error 
+                       for i in range(7)]
+        new_corr2 = st.Code.total_lookup_table_one_flag[tuple(inflags2)][tuple(syn2)]
+        new_corr2 = [Pauli_error if oper=='E' else oper for oper in new_corr2]
+        total_corr2 = ['I' if base_corr2[i]==new_corr2[i] else Pauli_error 
+                       for i in range(7)]
+    
+        #print 'total corr 1 =', total_corr1
+        #print 'total corr 2 =', total_corr2
+
+        total_corr = ['I' for i in range(7)] + total_corr1[:] + total_corr2[:]
+        corr_state = qfun.update_stabs(self.stabs, self.destabs, total_corr)
+        self.stabs = corr_state[0][:]
+        self.destabs = corr_state[1][:]
+
+        #return error_det, outflags1, outflags2
+        return error_det, subcircs_run_QECnonanc, subcircs_run_QECanc
    
+
 
     def run_jointQECX(self, error_det, inflags1, inflags2):
         '''
@@ -2733,7 +3462,7 @@ class QEC_with_flags(Quantum_Operation):
         error_index = 3
         Pauli_error = 'Z'
 
-        print error_det, inflags1, inflags2
+        #print error_det, inflags1, inflags2
         
         # undefined stab is the index of the stabilizer that is undefined.
         # With the current numbering, it's the first stab (stab 0)
@@ -2934,8 +3663,283 @@ class QEC_with_flags(Quantum_Operation):
             syn1[0] = (syn1[0]+1)%2
             syn2[0] = (syn2[0]+1)%2
 
-            print 'new syn1 =', syn1
-            print 'new syn2 =', syn2
+            #print 'new syn1 =', syn1
+            #print 'new syn2 =', syn2
+
+        # if the target flag was triggered in the previous step
+        if sum(inflags1)>0:
+            # if the target syndrome doesn't show an error, but the ancilla syndrome does,
+            # then flip the random stabilizers.
+            if sum(syn1) < sum(syn2):
+                syn1[0] = 1
+                syn2[0] = 0
+        
+        elif sum(inflags2)>0:
+            if sum(syn1) > sum(syn2):
+                syn1[0] = 0
+                syn2[1] = 1
+            
+        new_corr1 = st.Code.total_lookup_table_one_flag[tuple(inflags1)][tuple(syn1)]
+        new_corr1 = [Pauli_error if oper=='E' else oper for oper in new_corr1]
+        total_corr1 = ['I' if base_corr1[i]==new_corr1[i] else Pauli_error 
+                       for i in range(7)]
+        new_corr2 = st.Code.total_lookup_table_one_flag[tuple(inflags2)][tuple(syn2)]
+        new_corr2 = [Pauli_error if oper=='E' else oper for oper in new_corr2]
+        total_corr2 = ['I' if base_corr2[i]==new_corr2[i] else Pauli_error 
+                       for i in range(7)]
+    
+        #print 'total corr 1 =', total_corr1
+        #print 'total corr 2 =', total_corr2
+
+        total_corr = total_corr1[:] + ['I' for i in range(7)] + total_corr2[:]
+        corr_state = qfun.update_stabs(self.stabs, self.destabs, total_corr)
+        self.stabs = corr_state[0][:]
+        self.destabs = corr_state[1][:]
+
+        #return error_det, outflags1, outflags2
+        return error_det
+
+
+
+    def run_jointQECX_ion(self, error_det, inflags1, inflags2):
+        '''
+        error_det:  True if an error has already been detected
+                    False otherwise.
+                    If error_det is True, then we just run the
+                    stabilizers 1 time nonFT.
+        flags1:  the previous flags for the first logical qubit
+        flags2:  the previous flags for the second logical qubit
+        '''
+
+        error_index = 3
+        Pauli_error = 'Z'
+        n_subcirc = 14
+
+        #print error_det, inflags1, inflags2
+        
+        # undefined stab is the index of the stabilizer that is undefined.
+        # With the current numbering, it's the first stab (stab 0)
+        undefined_stab = 0
+
+        outflags1, outflags2 = [], []
+        
+        #print 'inflags1 =', inflags1
+        #print 'inflags2 =', inflags2
+
+        if error_det:
+            # In this case, we just run the non-FT circuits
+        
+            # Because the order of the stabilizer measurements in the QECz during
+            # the merging step is different from the standard order, we need to
+            # change the flag orderings
+            inflags1 = [inflags1[2], inflags1[0], inflags1[1]]
+            inflags2 = [inflags2[2], inflags2[0], inflags2[1]]
+
+            # First logical qubit
+            syn1 = []
+            for i in range(5,8):
+                syn1 += [self.run_one_circ(i).values()[0][0]]
+            # Reorder 2 to 0
+            self.run_one_circ(13)
+
+            # Second logical qubit
+            syn2 = []
+            for i in range(n_subcirc+5,n_subcirc+8):
+                syn2 += [self.run_one_circ(i).values()[0][0]]
+            # Reorder 2 to 0
+            self.run_one_circ(n_subcirc+8)
+            
+            outflags1, outflags2 = [0,0,0], [0,0,0]
+
+            #print 'syn1 =', syn1
+            #print 'syn2 =', syn2
+            
+
+        else:
+            # In this case, both inflags are [0,0,0]
+
+            ##########################################################################
+            # Alternative:  only measure the undefined stabilizers
+            error_det1 = False
+            syn1 = []
+            out_run1 = self.run_one_circ(0).values()
+            # Because the sub-circuit has 6 MS gates, we flip the outcomes
+            syn1 += [(out_run1[0][0]+1)%2]
+            outflags1 = (out_run1[1][0]+1)%2
+            if outflags1==1:  error_det1 = True
+
+            #brow.from_circuit(self.circuits[1], True)
+
+            #print 'syn1 =', syn1
+            #print 'outflags1 =', outflags1
+
+            error_det2 = False
+            syn2 = []
+            out_run2 = self.run_one_circ(n_subcirc).values()
+            # Because the sub-circuit has 6 MS gates, we flip the outcomes
+            syn2 += [(out_run2[0][0]+1)%2]
+            outflags2 = (out_run2[1][0]+1)%2
+            if outflags2==1:  error_det2 = True
+            #syn2 += [self.run_one_circ(n_subcirc+5).values()[0][0]
+
+            #brow.from_circuit(self.circuits[7], True)
+            #sys.exit(0)
+
+            #print 'syn2 =', syn2
+            #print 'outflags2 =', outflags2
+            
+            # If a flag was triggered in either one of the stabs, error_det = True
+            error_det = error_det1 or error_det2
+            
+            # If both syndromes were 1, correct both stabilizers
+            if syn1[0]==1 and syn2[0]==1:
+                total_corr1 = ['Z' if i==3 else 'I' for i in range(7)]
+                total_corr2 = ['Z' if i==3 else 'I' for i in range(7)]
+    
+                total_corr = total_corr1[:] + ['I' for i in range(7)] + total_corr2[:]
+                corr_state = qfun.update_stabs(self.stabs, self.destabs, total_corr)
+                self.stabs = corr_state[0][:]
+                self.destabs = corr_state[1][:]
+
+                # if that flag was not triggered we reorder from stab 1 to stab 0
+                # and we're done.
+                if outflags1==0:
+                    self.run_one_circ(12)
+                if outflags2==0:
+                    self.run_one_circ(n_subcirc+8)
+
+
+            # If the 2 syndromes are different, error_det = True and we measure
+            # the other 2 stabilizer pairs with no flags.
+            elif syn1[0] != syn2[0]:
+                error_det = True
+                syn1 += [self.run_one_circ(7).values()[0][0]]
+                #syn1 += [self.run_one_circ(5).values()[0][0]]
+                syn2 += [self.run_one_circ(n_subcirc+7).values()[0][0]]
+                #syn2 += [self.run_one_circ(11).values()[0][0]]
+
+                #print 'syn1 =', syn1
+                #print 'syn2 =', syn2
+
+                #brow.from_circuit(self.circuits[3], True)
+                #brow.from_circuit(self.circuits[9], True)
+
+                # If an error has been detected on both logical qubits, we
+                # apply a correction on both qubits 3.
+                if (1 in syn1) and (1 in syn2):
+                    total_corr1 = ['Z' if i==3 else 'I' for i in range(7)]
+                    total_corr2 = ['Z' if i==3 else 'I' for i in range(7)]
+    
+                    total_corr = total_corr1[:] + ['I' for i in range(7)] + total_corr2[:]
+                    corr_state = qfun.update_stabs(self.stabs, self.destabs, total_corr)
+                    self.stabs = corr_state[0][:]
+                    self.destabs = corr_state[1][:]
+                
+                else:
+                    syn1 += [self.run_one_circ(6).values()[0][0]]
+                    syn2 += [self.run_one_circ(n_subcirc+6).values()[0][0]]
+                   
+                    #print 'syn1 =', syn1
+                    #print 'syn2 =', syn2
+
+                    if (1 in syn1) and (1 in syn2):
+                        total_corr1 = ['Z' if i==3 else 'I' for i in range(7)]
+                        total_corr2 = ['Z' if i==3 else 'I' for i in range(7)]
+    
+                        total_corr = total_corr1[:] + ['I' for i in range(7)] + total_corr2[:]
+                        corr_state = qfun.update_stabs(self.stabs, self.destabs, total_corr)
+                        self.stabs = corr_state[0][:]
+                        self.destabs = corr_state[1][:]
+
+            
+            # The next part is done to correct the possible hook errors that
+            # occurred when we measured the first stabilizer with the flags
+
+            total_corr1 = ['I' for i in range(7)]
+            if outflags1==1:
+                syn_flags1 = []
+                syn_flags1 += [self.run_one_circ(9).values()[0][0]]
+                syn_flags1 += [self.run_one_circ(11).values()[0][0]]
+                # Reorder from 2 to 0
+                self.run_one_circ(13)
+
+                #print 'synflags1 =', syn_flags1
+
+                if sum(syn_flags1) > 0:
+                    if syn_flags1[0] == 0:
+                        total_corr1[3] = 'X'
+                        total_corr1[4] = 'X'
+                    else:
+                        if syn_flags1[1] == 0:
+                            total_corr1[3] = 'X'
+                        else:
+                            total_corr1[6] = 'X'
+                    
+                    total_corr = total_corr1 + ['I' for i in range(2*7)]
+                    corr_state = qfun.update_stabs(self.stabs, self.destabs, total_corr)
+                    self.stabs = corr_state[0][:]
+                    self.destabs = corr_state[1][:]
+                    
+
+            # We don't have to worry about flags on the ancilla logical qubit
+            # because the hook errors are X and we are going to measure in the
+            # X basis.
+            #total_corr2 = ['I' for i in range(7)]
+            #if outflags2==1:
+            #    syn_flags2 = []
+            #    syn_flags2 += [self.run_one_circ(n_subcirc+9).values()[0][0]]
+            #    syn_flags2 += [self.run_one_circ(n_subcirc+11).values()[0][0]]
+                # Reorder from 2 to 0
+            #    self.run_one_circ(n_subcirc+13)
+            #    if sum(syn_flags2) > 0:
+            #        if syn_flags2[0] == 0:
+            #            total_corr2[1] = 'Z'
+            #            total_corr2[2] = 'Z'
+            #        else:
+            #            if syn_flags2[1] == 0:
+            #                total_corr2[1] = 'Z'
+            #            else:
+            #                total_corr2[6] = 'Z'
+           
+            #if (outflags1==1) or (outflags2==1):
+            #    if (total_corr1.count('Z') > 0) or (total_corr2.count('Z') > 0):
+            #        total_corr = ['I' for i in range(7)] + total_corr1[:] + total_corr2[:]
+                    #print 'total corr =', total_corr
+            #        corr_state = qfun.update_stabs(self.stabs, self.destabs, total_corr)
+            #        self.stabs = corr_state[0][:]
+            #        self.destabs = corr_state[1][:]
+                
+            return error_det
+                
+            ##########################################################################
+
+
+        
+        #outflags1 += [0 for i in range(3-len(outflags1))]
+        #outflags2 += [0 for i in range(3-len(outflags2))]
+            
+        #print 'error det 1 =', error_det1
+        #print 'error det 2 =', error_det2
+
+        #print 'error_det =', error_det
+        #print 'syns =', syn1, syn2
+        #print 'outflags =', outflags1, outflags2
+    
+        base_corr1 = ['I' for i in range(7)]
+        base_corr2 = ['I' for i in range(7)]
+        
+        if sum(syn1)>0 and sum(syn2)>0:
+            # if both syndromes are non-trivial, we always apply a correction
+            # on qubit 1 to account for the fact that the measurement outcomes
+            # on stabilizers (1,2,5,6) are random.
+            base_corr1[error_index] = Pauli_error
+            base_corr2[error_index] = Pauli_error
+    
+            syn1[0] = (syn1[0]+1)%2
+            syn2[0] = (syn2[0]+1)%2
+
+            #print 'new syn1 =', syn1
+            #print 'new syn2 =', syn2
 
         # if the target flag was triggered in the previous step
         if sum(inflags1)>0:
@@ -2978,7 +3982,7 @@ class Supra_Circuit(object):
     '''
 
     def __init__(self, initial_state, circuit, code, chp_location,
-                 bare_ancilla=False):
+                 bare_ancilla=False, ion=False):
         '''
         bare_ancilla refers to whether or not the ancillae are bare
         qubits.
@@ -2990,6 +3994,7 @@ class Supra_Circuit(object):
         self.chp_loc = chp_location
         self.bare = bare_ancilla
         self.error_det = False
+        self.ion = ion
     
 
     def run_one_oper(self, quant_gate):
@@ -3009,7 +4014,10 @@ class Supra_Circuit(object):
 
             q_oper = QEC_with_flags(self.state[:], reordered_quant_circs, self.chp_loc) 
             #output = q_oper.run_jointQECZ(self.error_det, self.flags1[-1], self.flags2[-1])
-            output = q_oper.run_jointQECZ(self.error_det, self.flags1, self.flags2)
+            if self.ion:
+                output = q_oper.run_jointQECZ_ion(self.error_det, self.flags1, self.flags2)
+            else:
+                output = q_oper.run_jointQECZ(self.error_det, self.flags1, self.flags2)
             
             self.state = [q_oper.stabs[:], q_oper.destabs[:]]
             
@@ -3024,7 +4032,10 @@ class Supra_Circuit(object):
 
             q_oper = QEC_with_flags(self.state[:], reordered_quant_circs, self.chp_loc) 
             #output = q_oper.run_jointQECZ(self.error_det, self.flags1[-1], self.flags2[-1])
-            output = q_oper.run_jointQECX(self.error_det, self.flags1, self.flags2)
+            if self.ion:
+                output = q_oper.run_jointQECX_ion(self.error_det, self.flags1, self.flags2)
+            else:
+                output = q_oper.run_jointQECX(self.error_det, self.flags1, self.flags2)
             
             self.state = [q_oper.stabs[:], q_oper.destabs[:]]
             
@@ -3100,12 +4111,15 @@ class Supra_Circuit(object):
 
         elif quant_gate.gate_name=='MeasureXX_flags' or quant_gate.gate_name=='MeasureZZ_flags':
 
-            print 'Running Measure %s%s' %(quant_gate.gate_name[7],quant_gate.gate_name[8])
+            #print 'Running Measure %s%s' %(quant_gate.gate_name[7],quant_gate.gate_name[8])
 
             quant_circs = [g.circuit_list[0] for g in sub_circ.gates]
             q_oper = Measure_2_logicals(self.state[:], quant_circs, self.chp_loc)
             #output = q_oper.run_boundary_oper_flags(self.error_det)
-            output = q_oper.run_boundary_oper_flags_short(self.error_det)
+            if self.ion:
+                output = q_oper.run_boundary_oper_flags_short_ion(self.error_det)
+            else:
+                output = q_oper.run_boundary_oper_flags_short(self.error_det)
             self.state = [q_oper.stabs[:], q_oper.destabs[:]]
             #print self.state[0] 
 
@@ -3196,6 +4210,7 @@ class CNOT_latt_surg(Supra_Circuit):
                 self.flags1, self.flags2 = output[4], output[5]
                 self.error_det = output[8]
                 corr_targ, corr_anc = output[6], output[7]
+                subcircs_run_dict = output[9]
                 #print corr_targ, corr_anc
                 #print 'parity =', parM
                 #print output[8]
@@ -3228,6 +4243,7 @@ class CNOT_latt_surg(Supra_Circuit):
                 self.flags1, self.flags2 = output[4], output[5]
                 self.error_det = output[8]
                 corr_targ, corr_anc = output[6], output[7]
+                subcircs_run_dict = output[9]
                 #print corr_targ, corr_anc
                 #print 'parity =', parM
                 #print output[8]
@@ -3247,7 +4263,7 @@ class CNOT_latt_surg(Supra_Circuit):
                                                    log_corr)
                     self.state = [corr_state[0][:], corr_state[1][:]]
                   
-                    print 'Applied X correction on target'
+                    #print 'Applied X correction on target'
 
                 # if the ancilla correction is alternative, there was an error
                 # on the ancilla qubit before the measurement of ZZ and we apply
