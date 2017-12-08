@@ -2667,7 +2667,7 @@ class QEC_with_flags(Quantum_Operation):
                         else:
                             syn3 = self.run_one_circ(7).values()[0][0]
                             subcircs_run += [7] 
-                            print 'syn3 =', syn3
+                            #print 'syn3 =', syn3
                             # reorder from 2 to 0
                             self.run_one_circ(9)
                             subcircs_run += [9] 
@@ -2802,7 +2802,7 @@ class QEC_with_flags(Quantum_Operation):
                         # and we need to measure the third stabilizer nonFT.
                         else:
                             syn3 = self.run_one_circ(5).values()[0][0]
-                            print 'syn3 =', syn3
+                            #print 'syn3 =', syn3
                             total_syn, total_flag = [syn1,syn2,syn3], [flag1,flag2,0]
                             corr_type = 'unknown'
 
@@ -3269,6 +3269,15 @@ class QEC_with_flags(Quantum_Operation):
                     self.run_one_circ(n_subcirc+12)
                     subcircs_run_QECanc[12] = 1
 
+            elif syn1[0]==0 and syn2[0]==0:
+                # if that flag was not triggered we reorder from stab 1 to stab 0
+                # and we're done.
+                if outflags1==0:
+                    self.run_one_circ(12)
+                    subcircs_run_QECnonanc[12] = 1
+                if outflags2==0:
+                    self.run_one_circ(n_subcirc+12)
+                    subcircs_run_QECanc[12] = 1
 
             # If the 2 syndromes are different, error_det = True and we measure
             # the other 2 stabilizer pairs with no flags.
@@ -3714,6 +3723,12 @@ class QEC_with_flags(Quantum_Operation):
         error_index = 3
         Pauli_error = 'Z'
         n_subcirc = 14
+        
+        subcircs_run_QECnonanc = {}
+        subcircs_run_QECanc = {}
+        for i in range(n_subcirc):
+            subcircs_run_QECnonanc[i] = 0
+            subcircs_run_QECanc[i] = 0
 
         #print error_det, inflags1, inflags2
         
@@ -3739,15 +3754,19 @@ class QEC_with_flags(Quantum_Operation):
             syn1 = []
             for i in range(5,8):
                 syn1 += [self.run_one_circ(i).values()[0][0]]
+                subcircs_run_QECnonanc[i] = 1
             # Reorder 2 to 0
             self.run_one_circ(13)
+            subcircs_run_QECnonanc[13] = 1
 
             # Second logical qubit
             syn2 = []
             for i in range(n_subcirc+5,n_subcirc+8):
                 syn2 += [self.run_one_circ(i).values()[0][0]]
+                subcircs_run_QECanc[i] = 1
             # Reorder 2 to 0
             self.run_one_circ(n_subcirc+8)
+            subcircs_run_QECanc[8] = 1
             
             outflags1, outflags2 = [0,0,0], [0,0,0]
 
@@ -3763,6 +3782,7 @@ class QEC_with_flags(Quantum_Operation):
             error_det1 = False
             syn1 = []
             out_run1 = self.run_one_circ(0).values()
+            subcircs_run_QECnonanc[0] = 1
             # Because the sub-circuit has 6 MS gates, we flip the outcomes
             syn1 += [(out_run1[0][0]+1)%2]
             outflags1 = (out_run1[1][0]+1)%2
@@ -3776,6 +3796,7 @@ class QEC_with_flags(Quantum_Operation):
             error_det2 = False
             syn2 = []
             out_run2 = self.run_one_circ(n_subcirc).values()
+            subcircs_run_QECanc[0] = 1
             # Because the sub-circuit has 6 MS gates, we flip the outcomes
             syn2 += [(out_run2[0][0]+1)%2]
             outflags2 = (out_run2[1][0]+1)%2
@@ -3805,17 +3826,30 @@ class QEC_with_flags(Quantum_Operation):
                 # and we're done.
                 if outflags1==0:
                     self.run_one_circ(12)
+                    subcircs_run_QECnonanc[12] = 1
                 if outflags2==0:
                     self.run_one_circ(n_subcirc+8)
+                    subcircs_run_QECanc[8] = 1
 
+            elif syn1[0]==0 and syn2[0]==0:
+                # if that flag was not triggered we reorder from stab 1 to stab 0
+                # and we're done.
+                if outflags1==0:
+                    self.run_one_circ(12)
+                    subcircs_run_QECnonanc[12] = 1
+                if outflags2==0:
+                    self.run_one_circ(n_subcirc+8)
+                    subcircs_run_QECanc[8] = 1
 
             # If the 2 syndromes are different, error_det = True and we measure
             # the other 2 stabilizer pairs with no flags.
             elif syn1[0] != syn2[0]:
                 error_det = True
                 syn1 += [self.run_one_circ(7).values()[0][0]]
+                subcircs_run_QECnonanc[7] = 1
                 #syn1 += [self.run_one_circ(5).values()[0][0]]
                 syn2 += [self.run_one_circ(n_subcirc+7).values()[0][0]]
+                subcircs_run_QECanc[7] = 1
                 #syn2 += [self.run_one_circ(11).values()[0][0]]
 
                 #print 'syn1 =', syn1
@@ -3837,7 +3871,9 @@ class QEC_with_flags(Quantum_Operation):
                 
                 else:
                     syn1 += [self.run_one_circ(6).values()[0][0]]
+                    subcircs_run_QECnonanc[6] = 1
                     syn2 += [self.run_one_circ(n_subcirc+6).values()[0][0]]
+                    subcircs_run_QECanc[6] = 1
                    
                     #print 'syn1 =', syn1
                     #print 'syn2 =', syn2
@@ -3859,9 +3895,12 @@ class QEC_with_flags(Quantum_Operation):
             if outflags1==1:
                 syn_flags1 = []
                 syn_flags1 += [self.run_one_circ(9).values()[0][0]]
+                subcircs_run_QECnonanc[9] = 1
                 syn_flags1 += [self.run_one_circ(11).values()[0][0]]
+                subcircs_run_QECnonanc[11] = 1
                 # Reorder from 2 to 0
                 self.run_one_circ(13)
+                subcircs_run_QECnonanc[13] = 1
 
                 #print 'synflags1 =', syn_flags1
 
@@ -3909,7 +3948,7 @@ class QEC_with_flags(Quantum_Operation):
             #        self.stabs = corr_state[0][:]
             #        self.destabs = corr_state[1][:]
                 
-            return error_det
+            return error_det, subcircs_run_QECnonanc, subcircs_run_QECanc
                 
             ##########################################################################
 
@@ -3972,7 +4011,7 @@ class QEC_with_flags(Quantum_Operation):
         self.destabs = corr_state[1][:]
 
         #return error_det, outflags1, outflags2
-        return error_det
+        return error_det, subcircs_run_QECnonanc, subcircs_run_QECanc
 
 
 
@@ -3995,7 +4034,8 @@ class Supra_Circuit(object):
         self.bare = bare_ancilla
         self.error_det = False
         self.ion = ion
-    
+        self.total_subcircs_run = {}
+
 
     def run_one_oper(self, quant_gate):
         '''
@@ -4165,13 +4205,17 @@ class CNOT_latt_surg(Supra_Circuit):
             output = self.run_one_oper(q_oper)
            
             if q_oper.gate_name == 'JointQECZ_flags':
-                self.error_det = output
+                self.error_det = output[0]
+                subcircs_run = {0:output[1], 1:output[2]}
+                self.total_subcircs_run[1] = subcircs_run
                 #for stab in self.state[0]:
                 #    if 'Z' in stab:
                 #        print stab
 
             elif q_oper.gate_name == 'JointQECX_flags':
-                self.error_det = output
+                self.error_det = output[0]
+                subcircs_run = {0:output[1], 1:output[2]}
+                self.total_subcircs_run[3] = subcircs_run
 
             elif q_oper.gate_name[:8] == 'JointQEC':
                 n_rep1, n_rep2 = output
@@ -4210,7 +4254,7 @@ class CNOT_latt_surg(Supra_Circuit):
                 self.flags1, self.flags2 = output[4], output[5]
                 self.error_det = output[8]
                 corr_targ, corr_anc = output[6], output[7]
-                subcircs_run_dict = output[9]
+                self.total_subcircs_run[0] = output[9]
                 #print corr_targ, corr_anc
                 #print 'parity =', parM
                 #print output[8]
@@ -4243,7 +4287,7 @@ class CNOT_latt_surg(Supra_Circuit):
                 self.flags1, self.flags2 = output[4], output[5]
                 self.error_det = output[8]
                 corr_targ, corr_anc = output[6], output[7]
-                subcircs_run_dict = output[9]
+                self.total_subcircs_run[2] = output[9]
                 #print corr_targ, corr_anc
                 #print 'parity =', parM
                 #print output[8]
