@@ -123,14 +123,36 @@ for perm in w_perms4:
     results_trans['pZ'][tuple(perm)] = local_dict['p_failZ']
 
    
+# Physical error rates
+regime = 'current'
+T2 = {'current': 200., 'future': 2000.}  # T2 times in ms
+T_SM = {'current': 0.08, 'future': 0.03}  # Separation/merging times in ms
+# prep/meas, 2qMS, SM, cross, 1q, 5qMS
+n_ps_current = [0.001,
+                0.01,
+                0.5*(1.-math.exp(-T_SM['current']/T2['current'])),
+                'p_cross',
+                5.e-5,
+                0.05]
+n_ps_future = [1.e-4,
+               2.e-4,
+               0.5*(1.-math.exp(-T_SM['future']/T2['future'])),
+               'p_cross',
+               1.e-5,
+               0.001] 
 
+n_ps = {'current': n_ps_current, 'future': n_ps_future}
+n_ps = n_ps[regime]
 
-ps_slow_sampler = {0.002: 0.0617, 0.005: 0.217825, 0.008: 0.38575, 0.0025: 0.08496666666666666, 0.003: 0.1099, 0.004: 0.16507777777777777, 0.006: 0.2751, 0.007: 0.3330416666666667, 0.0015: 0.04088666666666667}
 list_ps = [i*1.e-5 for i in range(1,1000)]
-output_string = 'descriptor p pCNOT_p p_CNOT_l_nonFT p_CNOT_l_FT p_CNOT_l_FT2 p_CNOT_l_FTslow error_nonFT errorFT worst_case_FT worst_case_nonFT\n'
+output_string = 'descriptor p_cross pCNOT_pX p_CNOT_pZ p_lattX p_lattZ p_transX p_transZ\n'
 for p in list_ps:
-    p_occurrence_FT_total, p_occurrence_nonFT_total = 0., 0.
-    p_fail_FT, p_fail_nonFT = 0., 0.
+    p_occurrence_latt_total, p_occurrence_trans_total = 0., 0.
+    p_fail_lattX, p_fail_lattZ, p_fail_transX, p_fail_transZ = 0., 0., 0., 0.
+    
+    # first the lattice surgery
+    for perm in w_perms6:
+        
     for pair in list_errors:
         p_occurrence_FT = wrapper.prob_for_subset(p, p, 652, 786, pair[0], pair[1])
         p_occurrence_FT_total += p_occurrence_FT
