@@ -1,6 +1,8 @@
 import sys
 import json
+import math
 import itertools as it
+import steane as st
 import chper_wrapper as wrapper
 import qcircuit_functions as qfun
 
@@ -22,17 +24,31 @@ error_dict, Is_after2q, Is_after1q, faulty_groups = wrapper.dict_for_error_model
                                                         p_5q=p_5q)
 
 
-#FT = True
-#CNOT_circuits = qfun.create_latt_surg_CNOT(Is_after2q, initial_I, anc_parallel, EC_ctrl_targ, FT)
-#one_q_gates, two_q_gates = wrapper.gates_list_CNOT(CNOT_circuits, error_dict.keys())
+# create the latt-surg circuit
+#latt_circ = qfun.create_latt_surg_CNOT(False,True,True,False,True,True,True)
+#brow.from_circuit(latt_circ, True)
+#sys.exit(0)
 
-#print len(one_q_gates), len(two_q_gates)
+# Define the list of error-prone gates
+# For now, we have 6 groups: (a) preps and meas, (b) MS2, (c) I_idle, (d) I_cross, 
+#                            (e) 1-q gates, (f) MS5
+#gates_indices = wrapper.gates_list_CNOT_general(latt_circ, faulty_groups)
+#print [len(gate_kind) for gate_kind in gates_indices]
+#sys.exit(0)
 
-#FT = False
-#CNOT_circuits = qfun.create_latt_surg_CNOT(Is_after2q, initial_I, anc_parallel, EC_ctrl_targ, FT)
-#one_q_gates, two_q_gates = wrapper.gates_list_CNOT(CNOT_circuits, error_dict.keys())
+# create the transversal circuit
+#CNOT_circ = st.Generator.transversal_CNOT_ion_trap(False, True)
+#brow.from_circuit(CNOT_circ, True)
+#sys.exit(0)
 
-#print len(one_q_gates), len(two_q_gates)
+# Define the list of error-prone gates
+# For now, we have 4 groups: (a) I_idle, (b) I_cross, (c) 1-q gates, (d) 2-q MS gates
+#circ_list = [CNOT_circ.gates[0].circuit_list[0]]
+#gates_indices = wrapper.gates_list_general(circ_list, faulty_groups)
+#print [len(gate_kind) for gate_kind in gates_indices]
+#sys.exit(0)
+
+
 
 def total_perms6(perm_string):
     '''
@@ -43,7 +59,7 @@ def total_perms6(perm_string):
         new_perm = map(int,list(perm))
         if new_perm not in list_perms:
             list_perms += [new_perm]
-    
+
     return list_perms
 
 def total_perms4(perm_string):
@@ -68,14 +84,15 @@ w3_6, w3_4 = ['300000','210000','111000'], ['3000','2100','1110']
 w_6 = w1_6 + w2_6 + w3_6
 w_4 = w1_4 + w2_4 + w3_4
 
-w_perms6, w_perms4 = [], []
+w_perms6, w_perms4 = [[0,0,0,0,0,0]], [[0,0,0,0,0,0]]
 for config in w_6:
     w_perms6 += total_perms6(config)
 
 for config in w_4:
     w_perms4 += total_perms4(config)
 
-results_latt, results_trans = {'pX':{}, 'pZ':{}}, {'pX':{}, 'pZ':{}}
+results_latt = {'pX':{}, 'pZ':{}} 
+results_trans = {'pX':{}, 'pZ':{}}
 
 total_jsons = 8
 runs_per_json = 5000
@@ -83,6 +100,10 @@ total_runs = total_jsons*runs_per_json
 
 latt_folder = output_folder + 'latt_surg/noQEC/XZ/'
 for perm in w_perms6:
+    if sum(perm) == 0:
+        results_latt['pX'][tuple(perm)] = 0.           
+        results_latt['pZ'][tuple(perm)] = 0.         
+        continue
     perm_folder = latt_folder + '_'.join(map(str,perm)) + '/'
     if sum(perm) == 1:
         if perm[-1] == 0:
@@ -115,6 +136,10 @@ for perm in w_perms6:
 
 trans_folder = output_folder + 'transversal/noQEC/XZ/'
 for perm in w_perms4:
+    if sum(perm) == 0:
+        results_trans['pX'][tuple(perm)] = 0.
+        results_trans['pZ'][tuple(perm)] = 0.
+        continue
     abs_filename = trans_folder + '_'.join(map(str,perm)) + '.json'
     json_file = open(abs_filename, 'r')
     local_dict = json.load(json_file)
@@ -124,7 +149,7 @@ for perm in w_perms4:
 
    
 # Physical error rates
-regime = 'current'
+regime = 'future'
 T2 = {'current': 200., 'future': 2000.}  # T2 times in ms
 T_SM = {'current': 0.08, 'future': 0.03}  # Separation/merging times in ms
 # prep/meas, 2qMS, SM, cross, 1q, 5qMS
@@ -144,53 +169,56 @@ n_ps_future = [1.e-4,
 n_ps = {'current': n_ps_current, 'future': n_ps_future}
 n_ps = n_ps[regime]
 
+
+# number of gates in latt-surg CNOT: preps/meas, 2qMS, I_idle, I_cross, 1q, 5qMS.
+n_gates_latt = [205, 200, 52908, 827, 428, 33]
+# number of gates in transversal CNOT (preps/meas and 5qMS are 0)
+n_gates_trans = [7, 1302, 448, 28] 
+
 list_ps = [i*1.e-5 for i in range(1,1000)]
-output_string = 'descriptor p_cross pCNOT_pX p_CNOT_pZ p_lattX p_lattZ p_transX p_transZ\n'
+output_string = 'descriptor p_cross pCNOT_phys p_lattX_lower p_lattX_upper p_lattZ_lower p_lattZ_upper p_transX_lower p_transX_upper p_transZ_lower p_transZ_upper\n'
 for p in list_ps:
+    
+    # When generating a Bell pair, 
+    # the failure rate after a CNOT is 8p/15 for both X and Z errors
+    p_CNOT_phys = n_ps[1]*8./15.  
+    
+    n_ps[3] = p  # p is the value of p_cross
     p_occurrence_latt_total, p_occurrence_trans_total = 0., 0.
-    p_fail_lattX, p_fail_lattZ, p_fail_transX, p_fail_transZ = 0., 0., 0., 0.
+    p_fail_lattX_lower, p_fail_lattZ_lower = 0., 0. 
+    p_fail_transX_lower, p_fail_transZ_lower = 0., 0.
     
     # first the lattice surgery
     for perm in w_perms6:
-        
-    for pair in list_errors:
-        p_occurrence_FT = wrapper.prob_for_subset(p, p, 652, 786, pair[0], pair[1])
-        p_occurrence_FT_total += p_occurrence_FT
-        p_fail_FT_local = results_FT[(pair[0], pair[1])]*p_occurrence_FT
-        p_fail_FT += p_fail_FT_local
-        
-        p_occurrence_nonFT = wrapper.prob_for_subset(p, p, 56, 42, pair[0], pair[1])
-        p_occurrence_nonFT_total += p_occurrence_nonFT
-        p_fail_nonFT_local = results_nonFT[(pair[0], pair[1])]*p_occurrence_nonFT
-        p_fail_nonFT += p_fail_nonFT_local
-   
-    worst_case_FT = p_fail_FT + (1.-p_occurrence_FT_total)
-    worst_case_nonFT = p_fail_nonFT + (1.-p_occurrence_nonFT_total)
+        p_occurrence_latt = wrapper.prob_for_subset_general(n_gates_latt, perm, n_ps)
+        p_occurrence_latt_total += p_occurrence_latt
+        p_fail_lattX = results_latt['pX'][tuple(perm)]*p_occurrence_latt
+        p_fail_lattX_lower += p_fail_lattX 
+        p_fail_lattZ = results_latt['pZ'][tuple(perm)]*p_occurrence_latt
+        p_fail_lattZ_lower += p_fail_lattZ
 
-    error_FT = (1.-p_occurrence_FT_total)/p_occurrence_FT_total
-    error_nonFT = (1.-p_occurrence_nonFT_total)/p_occurrence_nonFT_total
-    if p < 0.002:
-        if p in ps_slow_sampler:
-            output_string += '%f nan %f %f nan %f %f %f %f %f\n' %(p, p_fail_nonFT, p_fail_FT, ps_slow_sampler[p], 100*error_nonFT, 100*error_FT, worst_case_FT, worst_case_nonFT)
-        else:
-            output_string += '%f nan %f %f nan nan %f %f %f %f\n' %(p, p_fail_nonFT, p_fail_FT, 100*error_nonFT, 100*error_FT, worst_case_FT, worst_case_nonFT)
-    else:
-        if p in ps_slow_sampler:
-            output_string += '%f nan %f nan %f %f %f %f %f %f\n' %(p, p_fail_nonFT, p_fail_FT, ps_slow_sampler[p], 100*error_nonFT, 100*error_FT, worst_case_FT, worst_case_nonFT)
-        else:
-            output_string += '%f nan %f nan %f nan %f %f %f %f\n' %(p, p_fail_nonFT, p_fail_FT, 100*error_nonFT, 100*error_FT, worst_case_FT, worst_case_nonFT)
+    p_fail_lattX_upper = p_fail_lattX_lower + (1.-p_occurrence_latt_total)
+    p_fail_lattZ_upper = p_fail_lattZ_lower + (1.-p_occurrence_latt_total)
 
-data_filename = 'resultsCNOT.dat'
+    # second transversal
+    for perm in w_perms4:
+        p_occurrence_trans = wrapper.prob_for_subset_general(n_gates_trans, perm[1:5], n_ps[1:5])
+        p_occurrence_trans_total += p_occurrence_trans
+        p_fail_transX = results_trans['pX'][tuple(perm)]*p_occurrence_trans
+        p_fail_transX_lower += p_fail_transX 
+        p_fail_transZ = results_trans['pZ'][tuple(perm)]*p_occurrence_trans
+        p_fail_transZ_lower += p_fail_transZ
+       
+    p_fail_transX_upper = p_fail_transX_lower + (1.-p_occurrence_trans_total)
+    p_fail_transZ_upper = p_fail_transZ_lower + (1.-p_occurrence_trans_total)
+
+    output_string += '%.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f\n' %(p, p_CNOT_phys, p_fail_lattX_lower, p_fail_lattX_upper, p_fail_lattZ_lower, p_fail_lattZ_upper, p_fail_transX_lower, p_fail_transX_upper, p_fail_transZ_lower, p_fail_transZ_upper)
+
+
+data_filename = 'comparison_latt_trans_failure_%s.dat' %regime
 abs_filename = output_folder + data_filename
 data_file = open(abs_filename, 'w')
 data_file.write(output_string)
 data_file.close()
 
 
-#for i in range(5):
-#    for j in range(5):
-#        p_local = wrapper.prob_for_subset(p1q, p2q, ns, nt, i, j)
-#        p_total += p_local
-#        print i,j, p_local
-#print p_total
-#print 100*(1.-p_total)/p_total
