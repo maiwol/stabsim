@@ -2485,6 +2485,47 @@ def prob_for_subset_general(n_gates_list, n_errors_list, n_ps):
 
 
 
+def find_necessary_subsets(n_gates_list, n_ps, tolerance, all_subsets):
+    '''
+    For a given value of tolerance, it returns the necessary subsets.
+    n_gates_list:  a list with the number of gates for each kind.
+    n_ps:  a list with the error rate for each kind of gate.
+    tolerance:  the probability of occurrence of the subsets not included.
+    all_subsets:  all the subsets to include
+    '''
+
+    prob_list = []   # list of probabilities of occurrence of every subset
+    for subset in all_subsets:
+        prob_list += [prob_for_subset_general(n_gates_list, subset, n_ps)]    
+
+    n_subsets = len(all_subsets)
+    total_prob = sum(prob_list)
+    #if total_prob < 1. - tolerance:
+    #    print 'Not enough subsets.'
+    #    print 'Total prob. of occurrence =', total_prob
+    #    return [], [], n_subsets
+
+    sorted_prob_list, sorted_indices = [], []
+    stepwise_total_prob = 0.
+    found_last_subset = False
+    for i in range(n_subsets):
+        max_prob = max(prob_list)
+        sorted_prob_list += [max_prob]
+        max_prob_index = prob_list.index(max_prob)
+        sorted_indices += [max_prob_index]
+        prob_list[max_prob_index] = -1.
+   
+        stepwise_total_prob += max_prob
+        if (not found_last_subset) and (stepwise_total_prob >= 1.-tolerance):
+            last_subset_i = i    
+            found_last_subset = True
+
+    if not found_last_subset:  last_subset_i = n_subsets
+
+    return sorted_indices, sorted_prob_list, last_subset_i
+
+
+
 def cardinality_subset(n_gates_list, n_errors_list):
     '''
     Calculates the cardinality (number of elements) of a given subset,

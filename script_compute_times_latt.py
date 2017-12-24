@@ -105,12 +105,56 @@ total_jsons = 8
 runs_per_json = 5000
 total_runs = total_jsons*runs_per_json
 
+
+# Total dictionaries
+dict_cross = {}
+dict_twoq = {}
+dict_oneq = {}
+dict_fiveq = {}
+dict_meas = {}
+dict_prep = {}
+dict_reor = {}
+
+# Dictionaries for the first subcircuit (Measure XX)
+cross0_QEC = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0}
+twoq0_QEC = {0:6, 1:6, 2:6, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0}
+oneq0_QEC = {0:8, 1:8, 2:8, 3:0, 4:0, 5:3, 6:3, 7:3, 8:0, 9:0}
+fiveq0_QEC = {0:0, 1:0, 2:0, 3:0, 4:0, 5:2, 6:2, 7:2, 8:0, 9:0}
+meas0_QEC = {0:2, 1:2, 2:2, 3:0, 4:0, 5:1, 6:1, 7:1, 8:0, 9:0}
+prep0_QEC = {0:2, 1:2, 2:2, 3:0, 4:0, 5:1, 6:1, 7:1, 8:0, 9:0}
+reor0_QEC = {0:36, 1:43, 2:45, 3:7, 4:10, 5:4, 6:11, 7:13, 8:7, 9:10}
+
+cross0 = {0:1, 1:0, 2:1, 3:1, 4:4, 5:2, 6:0, 7:2, 8:2, 9:cross0_QEC, 10:cross0_QEC, 11:2, 12:4}
+twoq0 = {0:2, 1:2, 2:0, 3:2, 4:4, 5:4, 6:4, 7:0, 8:4, 9:twoq0_QEC, 10:twoq0_QEC, 11:2, 12:4}
+oneq0 = {0:2, 1:2, 2:0, 3:2, 4:4, 5:4, 6:4, 7:0, 8:4, 9:oneq0_QEC, 10:oneq0_QEC, 11:2, 12:4}
+fiveq0 = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:fiveq0_QEC, 10:fiveq0_QEC, 11:0, 12:0}
+meas0 = {0:1, 1:1, 2:0, 3:1, 4:1, 5:1, 6:1, 7:0, 8:1, 9:meas0_QEC, 10:meas0_QEC, 11:1, 12:1}
+prep0 = {0:1, 1:1, 2:0, 3:1, 4:1, 5:1, 6:1, 7:0, 8:1, 9:prep0_QEC, 10:prep0_QEC, 11:1, 12:1}
+reor0 = {0:20, 1:19, 2:12, 3:22, 4:32, 5:37, 6:37, 7:12, 8:37, 9:reor0_QEC, 10:reor0_QEC, 11:21, 12:32}
+
+# Dictionaries for the second subcircuit (Joint QECZ)
+
+
+# Dictionaries for the third subcircuit (Measure ZZ)
+oneq2_QEC = {0:16, 1:16, 2:16, 3:0, 4:0, 5:11, 6:11, 7:11, 8:0, 9:0}
+
+cross2 = {0:1, 1:0, 2:1, 3:1, 4:4, 5:2, 6:0, 7:2, 8:2, 9:cross0_QEC, 10:cross0_QEC, 11:2, 12:4}
+twoq2 = {0:2, 1:2, 2:0, 3:2, 4:4, 5:4, 6:4, 7:0, 8:4, 9:twoq0_QEC, 10:twoq0_QEC, 11:2, 12:4}
+oneq2 = {0:2, 1:2, 2:0, 3:2, 4:4, 5:4, 6:4, 7:0, 8:4, 9:oneq2_QEC, 10:oneq2_QEC, 11:2, 12:4}
+fiveq2 = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:fiveq0_QEC, 10:fiveq0_QEC, 11:0, 12:0}
+meas2 = {0:1, 1:1, 2:0, 3:1, 4:1, 5:1, 6:1, 7:0, 8:1, 9:meas0_QEC, 10:meas0_QEC, 11:1, 12:1}
+prep2 = {0:1, 1:1, 2:0, 3:1, 4:1, 5:1, 6:1, 7:0, 8:1, 9:prep0_QEC, 10:prep0_QEC, 11:1, 12:1}
+reor2 = {0:18, 1:18, 2:12, 3:18, 4:34, 5:34, 6:34, 7:12, 8:34, 9:reor0_QEC, 10:reor0_QEC, 11:18, 12:34}
+
+
+
 latt_folder = output_folder + 'latt_surg/noQEC/XZ/'
 for perm in w_perms6:
-    if sum(perm) == 0:
-        results_latt['pX'][tuple(perm)] = 0.           
-        results_latt['pZ'][tuple(perm)] = 0.         
-        continue
+    #if sum(perm) == 0:
+        #results_latt['pX'][tuple(perm)] = 0.           
+        #results_latt['pZ'][tuple(perm)] = 0.         
+        #continue
+    
     perm_folder = latt_folder + '_'.join(map(str,perm)) + '/'
     if sum(perm) == 1:
         if perm[-1] == 0:
