@@ -2171,4 +2171,38 @@ def exhaustive_search_subset_latt_surg(subset, one_q_gates, two_q_gates,
         #if i==0:
         #    brow.from_circuit(CNOT_circ_copy, True)
         
+
+
+def add_dict_resources_latt_surg(subcirc_dict, resource_dict, total_runs):
+    '''
+    This is specific for the lattice-surgery CNOT circuit d-3 color code 
+    '''
+
+    total_resources = 0
+    for i in range(5):
         
+        # These two are the merging operations
+        if i==0 or i==2:
+            for j in range(13):
+                if j==9 or j==10:
+                    for k in range(10):
+                        total_resources += subcirc_dict[i][j][k]*resource_dict[i][j][k] 
+                else:
+                    total_resources += subcirc_dict[i][j]*resource_dict[i][j]
+        
+        # These two are the splitting operations
+        elif i==1 or i==3:
+            for j in range(2):
+                if i==3 and j==1:  n_k = 9
+                else:  n_k = 14
+                for k in range(n_k):
+                    total_resources += subcirc_dict[i][j][k]*resource_dict[i][j][k]
+
+        # This is the measurement of the ancilla logical qubit in the X basis
+        else:
+            total_resources += total_runs*resource_dict[i][0]
+
+    return total_resources
+
+
+

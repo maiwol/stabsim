@@ -122,7 +122,7 @@ oneq0_QEC = {0:8, 1:8, 2:8, 3:0, 4:0, 5:3, 6:3, 7:3, 8:0, 9:0}
 fiveq0_QEC = {0:0, 1:0, 2:0, 3:0, 4:0, 5:2, 6:2, 7:2, 8:0, 9:0}
 meas0_QEC = {0:2, 1:2, 2:2, 3:0, 4:0, 5:1, 6:1, 7:1, 8:0, 9:0}
 prep0_QEC = {0:2, 1:2, 2:2, 3:0, 4:0, 5:1, 6:1, 7:1, 8:0, 9:0}
-reor0_QEC = {0:36, 1:43, 2:45, 3:7, 4:10, 5:4, 6:11, 7:13, 8:7, 9:10}
+reor0_QEC = {0:36, 1:43, 2:45, 3:7, 4:10, 5:5, 6:12, 7:14, 8:7, 9:10}
 
 cross0 = {0:1, 1:0, 2:1, 3:1, 4:4, 5:2, 6:0, 7:2, 8:2, 9:cross0_QEC, 10:cross0_QEC, 11:2, 12:4}
 twoq0 = {0:2, 1:2, 2:0, 3:2, 4:4, 5:4, 6:4, 7:0, 8:4, 9:twoq0_QEC, 10:twoq0_QEC, 11:2, 12:4}
@@ -133,7 +133,21 @@ prep0 = {0:1, 1:1, 2:0, 3:1, 4:1, 5:1, 6:1, 7:0, 8:1, 9:prep0_QEC, 10:prep0_QEC,
 reor0 = {0:20, 1:19, 2:12, 3:22, 4:32, 5:37, 6:37, 7:12, 8:37, 9:reor0_QEC, 10:reor0_QEC, 11:21, 12:32}
 
 # Dictionaries for the second subcircuit (Joint QECZ)
+cross1_QEC = {0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0, 13:0}
+twoq1_QEC = {0:6, 1:6, 2:6, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0, 13:0}
+oneq1_QEC = {0:16, 1:16, 2:16, 3:0, 4:0, 5:11, 6:11, 7:11, 8:0, 9:11, 10:11, 11:11, 12:0, 13:0}
+fiveq1_QEC = {0:0, 1:0, 2:0, 3:0, 4:0, 5:2, 6:2, 7:2, 8:0, 9:2, 10:2, 11:2, 12:0, 13:0}
+meas1_QEC = {0:2, 1:2, 2:2, 3:0, 4:0, 5:1, 6:1, 7:1, 8:0, 9:1, 10:1, 11:1, 12:0, 13:0}
+prep1_QEC = {0:2, 1:2, 2:2, 3:0, 4:0, 5:1, 6:1, 7:1, 8:0, 9:1, 10:1, 11:1, 12:0, 13:0}
+reor1_QEC = {0: 36, 1:43, 2:45, 3:7, 4:9, 5:5, 6:12, 7:14, 8:9, 9:5, 10:12, 11:14, 12:7, 13:10}
 
+cross1 = {0:cross1_QEC, 1:cross1_QEC}
+twoq1 = {0:twoq1_QEC, 1:twoq1_QEC}
+oneq1 = {0:oneq1_QEC, 1:oneq1_QEC}
+fiveq1 = {0:fiveq1_QEC, 1:fiveq1_QEC}
+meas1 = {0:meas1_QEC, 1:meas1_QEC}
+prep1 = {0:prep1_QEC, 1:prep1_QEC}
+reor1 = {0:reor1_QEC, 1:reor1_QEC}
 
 # Dictionaries for the third subcircuit (Measure ZZ)
 oneq2_QEC = {0:16, 1:16, 2:16, 3:0, 4:0, 5:11, 6:11, 7:11, 8:0, 9:0}
@@ -146,6 +160,37 @@ meas2 = {0:1, 1:1, 2:0, 3:1, 4:1, 5:1, 6:1, 7:0, 8:1, 9:meas0_QEC, 10:meas0_QEC,
 prep2 = {0:1, 1:1, 2:0, 3:1, 4:1, 5:1, 6:1, 7:0, 8:1, 9:prep0_QEC, 10:prep0_QEC, 11:1, 12:1}
 reor2 = {0:18, 1:18, 2:12, 3:18, 4:34, 5:34, 6:34, 7:12, 8:34, 9:reor0_QEC, 10:reor0_QEC, 11:18, 12:34}
 
+# Dictionaries for the fourth subcircuit
+oneq3_QEC = {0:8, 1:8, 2:8, 3:0, 4:0, 5:3, 6:3, 7:3, 8:0, 9:3, 10:3, 11:3, 12:0, 13:0}
+
+cross3 = {0:cross1_QEC, 1: dict([(key, cross1_QEC[key]) for key in cross1_QEC.keys()[:9])}
+twoq3 = {0:twoq1_QEC, 1: dict([(key, twoq1_QEC[key]) for key in twoq1_QEC.keys()[:9])}
+oneq3 = {0:oneq3_QEC, 1: dict([(key, oneq3_QEC[key]) for key in oneq1_QEC.keys()[:9])}
+fiveq3 = {0:fiveq1_QEC, 1: dict([(key, fiveq1_QEC[key]) for key in fiveq1_QEC.keys()[:9])}
+meas3 = {0:meas1_QEC, 1: dict([(key, meas1_QEC[key]) for key in meas1_QEC.keys()[:9])}
+prep3 = {0:prep1_QEC, 1: dict([(key, prep1_QEC[key]) for key in prep1_QEC.keys()[:9])}
+reor3 = {0:reor1_QEC, 1: dict([(key, reor1_QEC[key]) for key in reor1_QEC.keys()[:9])}
+
+# Dictionaries for fifth subcircuit
+cross4 = {0:0}
+twoq4 = {0:0}
+oneq4 = {0:7}  # even though we're just doing MeasureX in the circuit itself
+fiveq4 = {0:0}
+meas4 = {0:7}
+prep4 = {0:0}
+reor4 = {0:0}
+
+# Complete dictionaries
+dict_cross = {0:cross0, 1:cross1, 2:cross2, 3:cross3, 4:cross4}
+dict_twoq = {0:twoq0, 1:twoq1, 2:twoq2, 3:twoq3, 4:twoq4}
+dict_oneq = {0:oneq0, 1:oneq1, 2:oneq2, 3:oneq3, 4:oneq4}
+dict_fiveq = {0:fiveq0, 1:fiveq1, 2:fiveq2, 3:fiveq3, 4:fiveq4}
+dict_meas = {0:meas0, 1:meas1, 2:meas2, 3:meas3, 4:meas4}
+dict_prep = {0:prep0, 1:prep1, 2:prep2, 3:prep3, 4:prep4}
+dict_reor = {0:reor0, 1:reor1, 2:reor2, 3:reor3, 4:reor4}
+resource_dict_list = [dict_cross, dict_twoq, dict_oneq, dict_fiveq, 
+                      dict_meas, dict_prep, dict_reor]
+n_resources = len(resource_dict_list)
 
 
 latt_folder = output_folder + 'latt_surg/noQEC/XZ/'
@@ -156,33 +201,53 @@ for perm in w_perms6:
         #continue
     
     perm_folder = latt_folder + '_'.join(map(str,perm)) + '/'
-    if sum(perm) == 1:
-        if perm[-1] == 0:
-            abs_filename = perm_folder + '1.json'
+
+    
+    clause1 = perm[0]==0 and perm[1]==0 and perm[2]==0 and perm[3]==0 and perm[4]==0
+    clause2 = sum(perm)==1 and perm!=[0,0,1,0,0,0]
+
+    if clause1 or clause2:
+        # for all of these permutations there is only 1 subcirc dict.
+        if clause1:
+            # for these permutations the resources are the same.  We get the numbers from
+            # 0_0_0_0_0_2.
+            perm_folder = latt_folder + '0_0_0_0_0_2/'
+        
+        abs_filename = perm_folder + '1.json'
+        json_file = open(abs_filename, 'r')
+        local_dict = json.load(json_file)
+        json_file.close()
+
+        subcirc_dict = local_dict['subcircs_run']
+        resources_perm = [] 
+        for resource_dict in resource_dict_list:
+            resources_local = qfun.add_dict_resources_latt_surg(subcirc_dict,
+                                                                resource_dict,
+                                                                local_dict['n_total'])
+            resources_perm += [float(resources_local)/float(local_dict['n_total'])]
+
+    else:
+        # all the other permutations have 8 subcirc dicts.
+
+        resources_perm = [0 for i in range(n_resources)]
+        for json_index in range(1,total_jsons+1):
+            abs_filename = perm_folder + '%i.json'%json_index
             json_file = open(abs_filename, 'r')
             local_dict = json.load(json_file)
             json_file.close()
-            results_latt['pX'][tuple(perm)] = local_dict['p_failX']           
-            results_latt['pZ'][tuple(perm)] = local_dict['p_failZ']           
-        else:
-            results_latt['pX'][tuple(perm)] = 0.           
-            results_latt['pZ'][tuple(perm)] = 0.           
+
+            subcirc_dict = local_dict['subcircs_run']
+            resources_local_local_list = [] 
+            for resource_dict in resource_dict_list:
+                resources_local = qfun.add_dict_resources_latt_surg(subcirc_dict,
+                                                                    resource_dict,
+                                                                    local_dict['n_total'])
+                resources_local_list += [float(resources_local)/float(local_dict['n_total'])]
             
-    else:
-        if perm[0]==0 and perm[1]==0 and perm[2]==0 and perm[3]==0 and perm[4]==0:
-            results_latt['pX'][tuple(perm)] = 0.           
-            results_latt['pZ'][tuple(perm)] = 0.           
-        else:
-            sum_failX, sum_failZ = 0, 0
-            for json_index in range(1,total_jsons+1):
-                abs_filename = perm_folder + '%i.json'%json_index
-                json_file = open(abs_filename, 'r')
-                local_dict = json.load(json_file)
-                json_file.close()
-                sum_failX += local_dict['n_failsX']
-                sum_failZ += local_dict['n_failsZ']
-            results_latt['pX'][tuple(perm)] = float(sum_failX)/float(total_runs)           
-            results_latt['pZ'][tuple(perm)] = float(sum_failZ)/float(total_runs)           
+            for i in range(n_resources):
+                resources_perm[i] += resources_local_list[i]
+
+
             
 
 trans_folder = output_folder + 'transversal/noQEC/XZ/'
