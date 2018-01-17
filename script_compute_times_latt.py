@@ -163,13 +163,13 @@ reor2 = {0:18, 1:18, 2:12, 3:18, 4:34, 5:34, 6:34, 7:12, 8:34, 9:reor0_QEC, 10:r
 # Dictionaries for the fourth subcircuit
 oneq3_QEC = {0:8, 1:8, 2:8, 3:0, 4:0, 5:3, 6:3, 7:3, 8:0, 9:3, 10:3, 11:3, 12:0, 13:0}
 
-cross3 = {0:cross1_QEC, 1: dict([(key, cross1_QEC[key]) for key in cross1_QEC.keys()[:9])}
-twoq3 = {0:twoq1_QEC, 1: dict([(key, twoq1_QEC[key]) for key in twoq1_QEC.keys()[:9])}
-oneq3 = {0:oneq3_QEC, 1: dict([(key, oneq3_QEC[key]) for key in oneq1_QEC.keys()[:9])}
-fiveq3 = {0:fiveq1_QEC, 1: dict([(key, fiveq1_QEC[key]) for key in fiveq1_QEC.keys()[:9])}
-meas3 = {0:meas1_QEC, 1: dict([(key, meas1_QEC[key]) for key in meas1_QEC.keys()[:9])}
-prep3 = {0:prep1_QEC, 1: dict([(key, prep1_QEC[key]) for key in prep1_QEC.keys()[:9])}
-reor3 = {0:reor1_QEC, 1: dict([(key, reor1_QEC[key]) for key in reor1_QEC.keys()[:9])}
+cross3 = {0:cross1_QEC, 1: dict([(key, cross1_QEC[key]) for key in cross1_QEC.keys()[:9]])}
+twoq3 = {0:twoq1_QEC, 1: dict([(key, twoq1_QEC[key]) for key in twoq1_QEC.keys()[:9]])}
+oneq3 = {0:oneq3_QEC, 1: dict([(key, oneq3_QEC[key]) for key in oneq1_QEC.keys()[:9]])}
+fiveq3 = {0:fiveq1_QEC, 1: dict([(key, fiveq1_QEC[key]) for key in fiveq1_QEC.keys()[:9]])}
+meas3 = {0:meas1_QEC, 1: dict([(key, meas1_QEC[key]) for key in meas1_QEC.keys()[:9]])}
+prep3 = {0:prep1_QEC, 1: dict([(key, prep1_QEC[key]) for key in prep1_QEC.keys()[:9]])}
+reor3 = {0:reor1_QEC, 1: dict([(key, reor1_QEC[key]) for key in reor1_QEC.keys()[:9]])}
 
 # Dictionaries for fifth subcircuit
 cross4 = {0:0}
@@ -193,6 +193,7 @@ resource_dict_list = [dict_cross, dict_twoq, dict_oneq, dict_fiveq,
 n_resources = len(resource_dict_list)
 
 
+results_latt = {}
 latt_folder = output_folder + 'latt_surg/noQEC/XZ/'
 for perm in w_perms6:
     #if sum(perm) == 0:
@@ -201,7 +202,7 @@ for perm in w_perms6:
         #continue
     
     perm_folder = latt_folder + '_'.join(map(str,perm)) + '/'
-
+    #print 'perm =', perm
     
     clause1 = perm[0]==0 and perm[1]==0 and perm[2]==0 and perm[3]==0 and perm[4]==0
     clause2 = sum(perm)==1 and perm!=[0,0,1,0,0,0]
@@ -212,13 +213,17 @@ for perm in w_perms6:
             # for these permutations the resources are the same.  We get the numbers from
             # 0_0_0_0_0_2.
             perm_folder = latt_folder + '0_0_0_0_0_2/'
-        
+       
         abs_filename = perm_folder + '1.json'
         json_file = open(abs_filename, 'r')
         local_dict = json.load(json_file)
         json_file.close()
 
         subcirc_dict = local_dict['subcircs_run']
+        #print type(subcirc_dict.keys()[0])
+        #print type(dict_cross.keys()[0])
+        #sys.exit(0)
+        
         resources_perm = [] 
         for resource_dict in resource_dict_list:
             resources_local = qfun.add_dict_resources_latt_surg(subcirc_dict,
@@ -237,7 +242,7 @@ for perm in w_perms6:
             json_file.close()
 
             subcirc_dict = local_dict['subcircs_run']
-            resources_local_local_list = [] 
+            resources_local_list = [] 
             for resource_dict in resource_dict_list:
                 resources_local = qfun.add_dict_resources_latt_surg(subcirc_dict,
                                                                     resource_dict,
@@ -245,10 +250,15 @@ for perm in w_perms6:
                 resources_local_list += [float(resources_local)/float(local_dict['n_total'])]
             
             for i in range(n_resources):
-                resources_perm[i] += resources_local_list[i]
+                resources_perm[i] += resources_local_list[i]/float(total_jsons)    
+
+           
+
+    results_latt[tuple(perm)] = resources_perm
+    print perm
+    print resources_perm
 
 
-            
 
 trans_folder = output_folder + 'transversal/noQEC/XZ/'
 for perm in w_perms4:
@@ -286,55 +296,64 @@ n_ps = {'current': n_ps_current, 'future': n_ps_future}
 n_ps = n_ps[regime]
 
 
+
 # number of gates in latt-surg CNOT: preps/meas, 2qMS, I_idle, I_cross, 1q, 5qMS.
 n_gates_latt = [205, 200, 52908, 827, 428, 33]
 # number of gates in transversal CNOT (preps/meas and 5qMS are 0)
 n_gates_trans = [7, 1302, 448, 28] 
 
 list_ps = [i*1.e-5 for i in range(1,1000)]
-output_string = 'descriptor p_cross pCNOT_phys p_lattX_lower p_lattX_upper p_lattZ_lower p_lattZ_upper p_transX_lower p_transX_upper p_transZ_lower p_transZ_upper\n'
+output_string = 'descriptor p_cross n_cross n2q n1q n5q n_meas p_occ_total n_cross_ave n2q_ave n1q_ave n5q_ave nmeas_ave\n'
 for p in list_ps:
     
     # When generating a Bell pair, 
     # the failure rate after a CNOT is 8p/15 for both X and Z errors
-    p_CNOT_phys = n_ps[1]*8./15.  
+    #p_CNOT_phys = n_ps[1]*8./15.  
     
     n_ps[3] = p  # p is the value of p_cross
-    p_occurrence_latt_total, p_occurrence_trans_total = 0., 0.
-    p_fail_lattX_lower, p_fail_lattZ_lower = 0., 0. 
-    p_fail_transX_lower, p_fail_transZ_lower = 0., 0.
+    p_occurrence_latt_total = 0.
+    ncross_lower, n2q_lower, n1q_lower, n5q_lower, nmeas_lower = 0., 0., 0., 0., 0. 
     
     # first the lattice surgery
     for perm in w_perms6:
         p_occurrence_latt = wrapper.prob_for_subset_general(n_gates_latt, perm, n_ps)
         p_occurrence_latt_total += p_occurrence_latt
-        p_fail_lattX = results_latt['pX'][tuple(perm)]*p_occurrence_latt
-        p_fail_lattX_lower += p_fail_lattX 
-        p_fail_lattZ = results_latt['pZ'][tuple(perm)]*p_occurrence_latt
-        p_fail_lattZ_lower += p_fail_lattZ
+        ncross_lower += results_latt[tuple(perm)][0]*p_occurrence_latt
+        n2q_lower += results_latt[tuple(perm)][1]*p_occurrence_latt
+        n1q_lower += results_latt[tuple(perm)][2]*p_occurrence_latt
+        n5q_lower += results_latt[tuple(perm)][3]*p_occurrence_latt
+        nmeas_lower += results_latt[tuple(perm)][4]*p_occurrence_latt
+          
+    #p_fail_lattX_upper = p_fail_lattX_lower + (1.-p_occurrence_latt_total)
+    #p_fail_lattZ_upper = p_fail_lattZ_lower + (1.-p_occurrence_latt_total)
 
-    p_fail_lattX_upper = p_fail_lattX_lower + (1.-p_occurrence_latt_total)
-    p_fail_lattZ_upper = p_fail_lattZ_lower + (1.-p_occurrence_latt_total)
+    ncross_ave = ncross_lower/p_occurrence_latt_total
+    n2q_ave = n2q_lower/p_occurrence_latt_total
+    n1q_ave = n1q_lower/p_occurrence_latt_total
+    n5q_ave = n5q_lower/p_occurrence_latt_total
+    nmeas_ave = nmeas_lower/p_occurrence_latt_total
+
 
     # second transversal
-    for perm in w_perms4:
-        p_occurrence_trans = wrapper.prob_for_subset_general(n_gates_trans, perm[1:5], n_ps[1:5])
-        p_occurrence_trans_total += p_occurrence_trans
-        p_fail_transX = results_trans['pX'][tuple(perm)]*p_occurrence_trans
-        p_fail_transX_lower += p_fail_transX 
-        p_fail_transZ = results_trans['pZ'][tuple(perm)]*p_occurrence_trans
-        p_fail_transZ_lower += p_fail_transZ
+    #for perm in w_perms4:
+    #    p_occurrence_trans = wrapper.prob_for_subset_general(n_gates_trans, perm[1:5], n_ps[1:5])
+    #    p_occurrence_trans_total += p_occurrence_trans
+    #    p_fail_transX = results_trans['pX'][tuple(perm)]*p_occurrence_trans
+    #    p_fail_transX_lower += p_fail_transX 
+    #    p_fail_transZ = results_trans['pZ'][tuple(perm)]*p_occurrence_trans
+    #    p_fail_transZ_lower += p_fail_transZ
        
-    p_fail_transX_upper = p_fail_transX_lower + (1.-p_occurrence_trans_total)
-    p_fail_transZ_upper = p_fail_transZ_lower + (1.-p_occurrence_trans_total)
+    #p_fail_transX_upper = p_fail_transX_lower + (1.-p_occurrence_trans_total)
+    #p_fail_transZ_upper = p_fail_transZ_lower + (1.-p_occurrence_trans_total)
 
     if p < 0.003:
-        output_string += '%.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f\n' %(p, p_CNOT_phys, p_fail_lattX_lower, p_fail_lattX_upper, p_fail_lattZ_lower, p_fail_lattZ_upper, p_fail_transX_lower, p_fail_transX_upper, p_fail_transZ_lower, p_fail_transZ_upper)
+        output_string += '%.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f\n' %(p, ncross_lower, n2q_lower, n1q_lower, n5q_lower, nmeas_lower, p_occurrence_latt_total, ncross_ave, n2q_ave, n1q_ave, n5q_ave, nmeas_ave)
     else:
-        output_string += '%.15f %.15f nan nan nan nan nan nan %.15f %.15f\n' %(p, p_CNOT_phys, p_fail_transZ_lower, p_fail_transZ_upper)
+        output_string += '%.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f %.15f\n' %(p, ncross_lower, n2q_lower, n1q_lower, n5q_lower, nmeas_lower, p_occurrence_latt_total, ncross_ave, n2q_ave, n1q_ave, n5q_ave, nmeas_ave)
+        
 
 
-data_filename = 'comparison_latt_trans_failure_%s.dat' %regime
+data_filename = 'resources_latt_pcross_%s.dat' %regime
 abs_filename = output_folder + data_filename
 data_file = open(abs_filename, 'w')
 data_file.write(output_string)
