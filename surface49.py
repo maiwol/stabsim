@@ -51,3 +51,22 @@ class Code:
                     }
 
 
+    # The complete lookup table is imported from the json file.
+    # The json file was generated with the script 'complete_lookups_surface49.py'.
+    # The idea is to add all the errors in the basic lookup table
+    # until we have obtained the 2**12 = 4096 possible syndromes. 
+    # Just like for surface17, we have 2 lookup tables, one for the X stabilizers
+    # and another one for the Z stabilizers
+
+    lookup_folder = './lookup_tables_surface49/'
+    lookuptable = {}
+    stab_kinds = ['X','Z']
+    for stab_kind in stab_kinds:
+        json_filename = 'lookup_stabs%s.json'%stab_kind
+        abs_filename = lookup_folder + json_filename
+        json_file = open(abs_filename, 'r')
+        local_table = json.load(json_file)
+        json_file.close()
+        lookuptable['%sstabs'%stab_kind] = local_table
+
+
