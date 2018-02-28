@@ -583,10 +583,12 @@ class Generator:
 
         if CNOT_index == 0:
             waiting_times = [6,5,1]
-            n_cross = 3
+            #n_cross = 3
+            n_cross = 9
         elif CNOT_index == 4:
             waiting_times = [8,5,1]
-            n_cross = 4
+            #n_cross = 4
+            n_cross = 14
         else:
             waiting_times = [5,5,1]
             n_cross = 0
@@ -654,7 +656,9 @@ class Generator:
         for q in range(14):
             for t in range(6):
                 final_circ.add_gate_at([q], 'I_idle')
-            for t in range(3):
+            #n_cross_final = 3
+            n_cross_final = 9
+            for t in range(n_cross_final):
                 final_circ.add_gate_at([q], 'I_cross')
 
         if encoded_CNOTs:
